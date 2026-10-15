@@ -1,40 +1,50 @@
 {
-  "schema": 1,
-  "service": "hiro",
-  "workload_subject": null,
+  "approved_releases": [
+    {
+      "allow_cached_keys": false,
+      "allow_dynamic_platform": false,
+      "allow_smt": true,
+      "image_release_sha256": "3d12e5e00f053e83299a135bbd8d5627d0ffe80d31bc55e9b6b861dfbfc8a3af",
+      "release_sha256": "aedd1392b26643b580460c7e3fc5fd67f2c63c0d00bc88414b80d02c48f0a1dd",
+      "sequence": 1,
+      "source_commit": "3aaae6bcac8700e092f8015758b6ef9cc3e14477",
+      "tag": "v0.1.0"
+    },
+    {
+      "allow_cached_keys": false,
+      "allow_dynamic_platform": false,
+      "allow_smt": true,
+      "image_release_sha256": "bc39637f14ca212b2b270d9f09d71da3b4551242d20f5776e584dc1df33d6e54",
+      "release_sha256": "0f873b4a978c37d7fe1b1180fbc016b537986715f27df97f656e9f5a968f30c5",
+      "sequence": 2,
+      "source_commit": "f0399a374cf64de4f79b1f9d6e8d0b609aae20c6",
+      "tag": "v0.1.1"
+    }
+  ],
   "endpoint": "wss://api.cypherpunklabs.io/v1/session",
+  "max_challenge_age_seconds": 120,
+  "max_policy_age_seconds": 259200,
+  "max_recipient_age_seconds": 300,
+  "minimum_release_sequence": 2,
   "policy_id": "hiro.gcp-tdx.production.v1",
   "policy_repository": "CypherpunkLabs-AI/hiro",
   "policy_workflow": ".github/workflows/client-policy.yml",
-  "minimum_release_sequence": 1,
-  "max_policy_age_seconds": 259200,
-  "max_challenge_age_seconds": 120,
-  "max_recipient_age_seconds": 300,
   "publishers": {
     "hiro": {
-      "repository": "CypherpunkLabs-AI/hiro",
       "owner_id": 325408208,
+      "repository": "CypherpunkLabs-AI/hiro",
       "repository_id": 1420000485,
       "workflow": ".github/workflows/ci.yml"
     },
     "hiro-image": {
-      "repository": "CypherpunkLabs-AI/hiro-image",
       "owner_id": 325408208,
+      "repository": "CypherpunkLabs-AI/hiro-image",
       "repository_id": 1418755587,
       "workflow": ".github/workflows/image.yml"
     }
   },
-  "approved_releases": [
-    {
-      "tag": "v0.1.0",
-      "sequence": 1,
-      "source_commit": "3aaae6bcac8700e092f8015758b6ef9cc3e14477",
-      "release_sha256": "aedd1392b26643b580460c7e3fc5fd67f2c63c0d00bc88414b80d02c48f0a1dd",
-      "image_release_sha256": "3d12e5e00f053e83299a135bbd8d5627d0ffe80d31bc55e9b6b861dfbfc8a3af",
-      "allow_smt": true,
-      "allow_dynamic_platform": false,
-      "allow_cached_keys": false
-    }
-  ],
-  "revoked_releases": []
+  "revoked_releases": [],
+  "schema": 1,
+  "service": "hiro",
+  "workload_subject": null
 }
