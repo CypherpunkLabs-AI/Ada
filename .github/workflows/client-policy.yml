@@ -1,0 +1,81 @@
+name: Client release approval
+on:
+  push:
+    branches: [main]
+    paths:
+      - client-policy/production.json
+      - .github/workflows/client-policy.yml
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */12 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: hiro-client-policy
+  cancel-in-progress: false
+jobs:
+  dispatch:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Dispatch the immutable policy signer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          signer=client-policy-signer-v1
+          if ! gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$signer" >/dev/null 2>&1; then
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$signer" -f sha="$GITHUB_SHA"
+          fi
+          gh workflow run client-policy.yml --repo "$GITHUB_REPOSITORY" --ref "$signer"
+  approve:
+    if: github.ref == 'refs/tags/client-policy-signer-v1'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Load reviewed approvals from main without executing its code
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          commit=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
+          gh api "repos/$GITHUB_REPOSITORY/contents/client-policy/production.json?ref=$commit" --jq .content | base64 --decode > "$RUNNER_TEMP/approvals.json"
+          echo "Approval source commit: $commit"
+      - name: Authenticate reviewed release inputs and prepare authorization
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: python3 scripts/client-policy.py prepare --approvals "$RUNNER_TEMP/approvals.json"
+      - name: Sign authorization and bootstrap
+        id: approval
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-path: |
+            policy-dist/policy.json
+            policy-dist/client-bootstrap.json
+      - name: Verify signatures and package the policy envelope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          POLICY_BUNDLE: ${{ steps.approval.outputs.bundle-path }}
+        run: python3 scripts/client-policy.py seal
+      - name: Publish public authorization files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view client-policy --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create client-policy --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'Hiro client authorization' --notes 'Signed, expiring release authorization. Bootstrap trust must be authenticated by the client build.' --prerelease --latest=false
+          fi
+          gh release upload client-policy policy-dist/policy-envelope.json policy-dist/policy.json policy-dist/policy.sigstore.json policy-dist/client-bootstrap.json policy-dist/trust-config.json policy-dist/trusted-root.json --repo "$GITHUB_REPOSITORY" --clobber
+      - name: Retain immutable approval run artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: client-policy-${{ github.run_number }}-${{ github.run_attempt }}
+          path: policy-dist/
+          retention-days: 90

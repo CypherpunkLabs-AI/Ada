@@ -153,6 +153,10 @@ async fn main() -> anyhow::Result<()> {
     );
     let app = Router::new()
         .route("/health", get(|| async { StatusCode::OK }))
+        .route(
+            "/v1/verification-policy",
+            get(hiro_proxy::attestation::policy::get),
+        )
         .merge(oak.router());
     let listener = TcpListener::bind(config.bind_address)
         .await

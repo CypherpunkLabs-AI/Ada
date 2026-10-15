@@ -12,7 +12,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use tokio::sync::Semaphore;
+use tokio::sync::{Mutex, Semaphore};
 
 pub const PROFILE: &str = "hiro.gcp-tdx.v1";
 const RELEASE_DOMAIN: &[u8] = b"hiro.release.v1\0";
@@ -27,6 +27,13 @@ pub struct Attester {
     report_dir: PathBuf,
     evidence_dir: PathBuf,
     slot: Arc<Semaphore>,
+    collateral: Arc<Mutex<Option<CachedCollateral>>>,
+}
+
+struct CachedCollateral {
+    certificate_digest: [u8; 32],
+    expires_at: i64,
+    value: Value,
 }
 
 impl Attester {
@@ -42,6 +49,7 @@ impl Attester {
             report_dir,
             evidence_dir,
             slot: Arc::new(Semaphore::new(1)),
+            collateral: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -62,10 +70,65 @@ impl Attester {
             let _permit = permit;
             this.collect(report_data)
         });
-        tokio::time::timeout(Duration::from_secs(20), task)
+        let mut evidence = tokio::time::timeout(Duration::from_secs(20), task)
             .await
             .context("TDX quote timeout")?
-            .context("TDX collector failed")?
+            .context("TDX collector failed")??;
+        let raw = hex::decode(evidence["quote"].as_str().context("missing quote")?)?;
+        evidence["collateral"] =
+            tokio::time::timeout(Duration::from_secs(25), self.collateral(&raw))
+                .await
+                .context("Intel collateral timeout")??;
+        Ok(evidence)
+    }
+
+    async fn collateral(&self, raw: &[u8]) -> anyhow::Result<Value> {
+        let parsed = Quote::parse(raw)?;
+        let certificate_digest = Sha256::digest(parsed.raw_cert_chain()?).into();
+        let mut cache = self.collateral.lock().await;
+        let now = chrono::Utc::now().timestamp();
+        if let Some(cached) = &*cache {
+            if cached.certificate_digest == certificate_digest && now < cached.expires_at {
+                return Ok(cached.value.clone());
+            }
+        }
+        // Use Intel PCS explicitly; never use the library's default PCCS.
+        // These remain untrusted public inputs. The client performs DCAP
+        // verification with its own Intel roots, clock and acceptance policy.
+        let collateral = dcap_qvl::collateral::get_collateral_from_pcs(raw).await?;
+        let mut expires_at = now + 3600;
+        for document in [&collateral.tcb_info, &collateral.qe_identity] {
+            let value: Value = serde_json::from_str(document)?;
+            let next = chrono::DateTime::parse_from_rfc3339(
+                value["nextUpdate"]
+                    .as_str()
+                    .context("collateral nextUpdate missing")?,
+            )?
+            .timestamp();
+            expires_at = expires_at.min(next - 60);
+        }
+        for crl in [&collateral.root_ca_crl, &collateral.pck_crl] {
+            let (_, crl) = x509_parser::parse_x509_crl(crl)
+                .map_err(|_| anyhow::anyhow!("invalid collateral CRL"))?;
+            expires_at = expires_at.min(
+                crl.next_update()
+                    .context("CRL nextUpdate missing")?
+                    .timestamp()
+                    - 60,
+            );
+        }
+        ensure!(expires_at > now, "expired Intel collateral");
+        let value = serde_json::to_value(collateral)?;
+        ensure!(
+            serde_json::to_vec(&value)?.len() <= 512 * 1024,
+            "collateral size limit"
+        );
+        *cache = Some(CachedCollateral {
+            certificate_digest,
+            expires_at,
+            value: value.clone(),
+        });
+        Ok(value)
     }
 
     fn collect(&self, report_data: [u8; 64]) -> anyhow::Result<Value> {
