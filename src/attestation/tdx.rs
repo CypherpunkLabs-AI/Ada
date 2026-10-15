@@ -87,10 +87,11 @@ impl Attester {
         let certificate_digest = Sha256::digest(parsed.raw_cert_chain()?).into();
         let mut cache = self.collateral.lock().await;
         let now = chrono::Utc::now().timestamp();
-        if let Some(cached) = &*cache {
-            if cached.certificate_digest == certificate_digest && now < cached.expires_at {
-                return Ok(cached.value.clone());
-            }
+        if let Some(cached) = &*cache
+            && cached.certificate_digest == certificate_digest
+            && now < cached.expires_at
+        {
+            return Ok(cached.value.clone());
         }
         // Use Intel PCS explicitly; never use the library's default PCCS.
         // These remain untrusted public inputs. The client performs DCAP

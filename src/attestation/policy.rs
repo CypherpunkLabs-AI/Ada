@@ -19,10 +19,10 @@ static CACHE: OnceLock<Mutex<Option<Cached>>> = OnceLock::new();
 
 async fn load() -> anyhow::Result<Vec<u8>> {
     let mut cache = CACHE.get_or_init(|| Mutex::new(None)).lock().await;
-    if let Some(cached) = &*cache {
-        if cached.fetched.elapsed() < Duration::from_secs(30) {
-            return Ok(cached.bytes.clone());
-        }
+    if let Some(cached) = &*cache
+        && cached.fetched.elapsed() < Duration::from_secs(30)
+    {
+        return Ok(cached.bytes.clone());
     }
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
