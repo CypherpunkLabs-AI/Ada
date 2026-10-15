@@ -118,7 +118,7 @@ jobs:
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID || 'cypherpunklabs' }}
       GCP_IMAGE_BUCKET: ${{ vars.GCP_IMAGE_BUCKET || 'cypherpunklabs-hiro-images' }}
       GCP_IMAGE_PUBLISHER: ${{ vars.GCP_IMAGE_PUBLISHER || 'hiro-image-publisher@cypherpunklabs.iam.gserviceaccount.com' }}
-      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER || 'projects/1069855069526/locations/global/workloadIdentityPools/hiro-image-publisher/providers/hiro-proxy' }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER || 'projects/1069855069526/locations/global/workloadIdentityPools/hiro-image-publisher/providers/hiro' }}
     permissions:
       contents: write
       packages: write
