@@ -1,0 +1,31 @@
+syntax = "proto3";
+package cypherpunk.session.v1;
+// Only Assertion travels before encryption. All Record fields are encrypted.
+message Assertion { uint32 version = 1; bytes evidence = 2; string profile = 3; }
+message Header { string name = 1; string value = 2; }
+message Start { string method = 1; string path = 2; repeated Header headers = 3; }
+message Data { uint64 index = 1; bytes body = 2; }
+message End { uint64 length = 1; bytes sha256 = 2; }
+message Response { uint32 status = 1; repeated Header headers = 2; }
+message Completion { End body = 1; string receipt_id = 2; bytes receipt = 3; bytes session = 4; }
+message Empty {}
+message Failure { string code = 1; }
+message Credit { uint32 bytes = 1; }
+message Record {
+  uint32 version = 1;
+  bytes id = 2;
+  oneof kind {
+    Start request_start = 3;
+    Data request_data = 4;
+    End request_end = 5;
+    Response response_start = 6;
+    Data response_data = 7;
+    Completion response_end = 8;
+    Empty cancel = 9;
+    Empty cancelled = 10;
+    Failure failure = 11;
+    Credit upload_credit = 12;
+    Credit response_credit = 13;
+    Empty terminal_ack = 14;
+  }
+}

@@ -1,0 +1,43 @@
+module(name = "hiro_proxy")
+
+bazel_dep(name = "rules_rust", version = "0.70.0")
+bazel_dep(name = "oak")
+
+archive_override(
+    module_name = "oak",
+    urls = ["https://github.com/project-oak/oak/archive/8fe08a5f80c768613e8287a5a50bb1dd80c6d978.tar.gz"],
+    strip_prefix = "oak-8fe08a5f80c768613e8287a5a50bb1dd80c6d978",
+    integrity = "sha256-JfjClLUVCbw2tqe0H01F4DIEFk3mwoE4NuOPXUFARVM=",
+)
+
+oak_toolchains = use_extension("@oak//bazel/rust:extensions.bzl", "rust_toolchains")
+use_repo(oak_toolchains, "oak_rust_linux__x86_64-unknown-linux-gnu__nightly")
+register_toolchains("@oak_rust_linux__x86_64-unknown-linux-gnu__nightly//:all")
+
+oak_crates = use_extension("@oak//bazel/crates:extensions.bzl", "aliased_crates_repository")
+use_repo(oak_crates, "oak_crates_index")
+
+crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+crate.from_cargo(
+    name = "proxy_crates",
+    manifests = ["//:Cargo.toml"],
+    cargo_lockfile = "//:Cargo.lock",
+    skip_cargo_lockfile_overwrite = True,
+    generate_build_scripts = True,
+    supported_platform_triples = ["x86_64-unknown-linux-gnu"],
+)
+
+# Oak protobuf messages and Hiro's Message calls must share one trait identity.
+crate.annotation(
+    crate = "prost",
+    repositories = ["proxy_crates"],
+    override_target_lib = "@oak_crates_index//:prost",
+)
+# AWS-LC's CMake build preserves jitterentropy's mandatory per-source -O0
+# after Bazel's release CFLAGS. Use the upstream-supported builder, unpatched.
+crate.annotation(
+    crate = "aws-lc-sys",
+    repositories = ["proxy_crates"],
+    build_script_env = {"AWS_LC_SYS_CMAKE_BUILDER": "1"},
+)
+use_repo(crate, "proxy_crates")

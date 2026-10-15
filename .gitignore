@@ -1,0 +1,16 @@
+/target/
+/bazel-*/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.log
+.DS_Store
+docs*
+__pycache__/
+*.pyc
+/dist/
+/gha-creds-*.json

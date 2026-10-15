@@ -1,0 +1,16 @@
+.git
+.github
+target
+**/target
+bazel-*
+.env*
+gha-creds-*.json
+deploy
+deployment
+dist
+scripts/*
+!scripts/install-bazel
+tests
+image-version
+docs
+*.md

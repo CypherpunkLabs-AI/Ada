@@ -1,0 +1,13 @@
+build --@rules_rust//rust/toolchain/channel=nightly
+build --incompatible_strict_action_env
+build --action_env=PATH=/usr/local/bin:/usr/bin:/bin
+# GNU gold is deprecated by rustc; use binutils' supported BFD linker.
+build --linkopt=-fuse-ld=bfd
+build --host_linkopt=-fuse-ld=bfd
+build --features=-supports_start_end_lib
+build --host_features=-supports_start_end_lib
+
+build:release --compilation_mode=opt
+build:release --@rules_rust//rust/settings:lto=thin
+build:release --@rules_rust//rust/settings:codegen_units=1
+build:release --strip=always

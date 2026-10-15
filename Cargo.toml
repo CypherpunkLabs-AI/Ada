@@ -1,0 +1,79 @@
+[package]
+name = "hiro-proxy"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94.1"
+description = "Attested confidential gateway for Hiro"
+license = "AGPL-3.0-only"
+repository = "https://github.com/cypherpunklabs-ai/hiro-proxy"
+
+[dependencies]
+aws-sdk-s3 = { version = "1.145.0", default-features = false, features = ["default-https-client", "http-1x", "rt-tokio"] }
+prost = "=0.14.3"
+# Oak is supplied by its upstream Bazel targets in BUILD.bazel.
+evidence-sha2 = { package = "sha2", version = "=0.10.9" }
+ed25519-dalek = { version = "3.0.0", features = ["zeroize"] }
+hex = "=0.4.3"
+ring = "=0.17.14"
+libc = "0.2"
+zeroize = "=1.9.1"
+
+anyhow = "1.0.104"
+base64 = "0.23.1"
+futures-util = "0.3"
+eventsource-stream = "=0.2.3"
+governor = "0.10.4"
+hmac = "0.13"
+chrono = { version = "0.4", features = ["serde"] }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls-ring", "postgres", "chrono", "uuid", "json"] }
+# Bazel unifies host/target sqlx-core features; keep its Postgres Executor
+# implementation compatible with the resulting offline-enabled trait.
+sqlx-postgres = { version = "0.9", default-features = false, features = ["offline"] }
+jsonwebtoken = { version = "=11.0.0", default-features = false, features = ["aws_lc_rs", "use_pem"] }
+secrecy = "0.10"
+thiserror = "2"
+serde_json = "1"
+serde_yaml_ng = "0.10.0"
+reqwest = { version = "0.13.5", default-features = false, features = ["form", "json", "query", "rustls-no-provider", "stream"] }
+sha2 = "0.11.0"
+subtle = "2"
+uuid = { version = "1", features = ["v4", "serde"] }
+axum = { version = "0.8.9", features = ["http2", "json", "macros", "ws"] }
+aci-protocol = { git = "https://github.com/Dstack-TEE/private-ai-gateway.git", rev = "a991c08553cbd0638199abfd6eace9c83ee0a891" }
+# Pin the integrated client API, including encrypted streaming and exact-byte receipts.
+nearai-inference-sdk = { git = "https://github.com/nearai/inference-sdk.git", rev = "14b29f67b63b97bf63678296e095ddfcc8f5ba74" }
+# The upstream SDK enables native TLS; build OpenSSL into the binary.
+openssl = { version = "0.10", features = ["vendored"] }
+# The local attester only parses reports; provider verification belongs to the SDK.
+dcap-qvl = "=0.3.12"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-acme = { version = "=0.15.4", default-features = false, features = ["ring", "webpki-roots"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio", "service"] }
+async-trait = "0.1"
+x509-parser = "0.18"
+getrandom = "=0.2.17"
+async-stream = "=0.3.6"
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time", "io-util"] }
+tower = { version = "0.5", features = ["util"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[dev-dependencies]
+rcgen = { version = "=0.13.2", default-features = false, features = ["ring"] }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = "symbols"
+
+[lints.rust]
+unsafe_code = "forbid"
+unused_must_use = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+

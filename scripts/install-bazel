@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+version="$(cat "$root/.bazelversion")"
+[[ "$version" == 8.5.1 ]] || { echo 'Update the verified Bazel checksum when changing .bazelversion.' >&2; exit 1; }
+[[ "$(uname -s)/$(uname -m)" == Linux/x86_64 ]] || { echo 'This installer supports Linux x86_64.' >&2; exit 1; }
+destination="${1:?usage: scripts/install-bazel DESTINATION_DIRECTORY}"
+mkdir -p -- "$destination"
+temporary="$(mktemp -d)"
+trap 'rm -rf -- "$temporary"' EXIT
+curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
+    "https://github.com/bazelbuild/bazel/releases/download/$version/bazel-$version-linux-x86_64" \
+    --output "$temporary/bazel"
+printf '%s  %s\n' \
+    '61d89402f0368e64b6c827be5de79d8e65382e8124c3cbb97325611a1851392e' \
+    "$temporary/bazel" | sha256sum --check --status
+install -m 0755 "$temporary/bazel" "$destination/bazel"

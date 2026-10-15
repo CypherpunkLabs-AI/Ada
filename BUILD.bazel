@@ -1,0 +1,55 @@
+load("@proxy_crates//:defs.bzl", "aliases", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_clippy", "rust_library", "rust_test", "rustfmt_test")
+
+exports_files(["Cargo.toml", "Cargo.lock"])
+
+rust_library(
+    name = "hiro_proxy",
+    crate_name = "hiro_proxy",
+    crate_root = "src/lib.rs",
+    srcs = glob(["src/**/*.rs"], exclude = ["src/main.rs"]),
+    edition = "2024",
+    compile_data = glob(["src/attestation/testdata/*"]) + ["src/inference/upstream/nearai-publishers.json"],
+    aliases = aliases(),
+    deps = all_crate_deps(normal = True) + [
+        "@oak//oak_session:oak_session",
+        "@oak//oak_proto_rust:oak_proto_rust",
+    ],
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    rustc_flags = ["-Funsafe-code", "-Dunused-must-use", "-Wclippy::all", "-Wclippy::pedantic"],
+)
+
+rust_binary(
+    name = "hiro-proxy",
+    crate_name = "hiro_proxy_bin",
+    crate_root = "src/main.rs",
+    srcs = ["src/main.rs"],
+    edition = "2024",
+    aliases = aliases(),
+    deps = all_crate_deps(normal = True) + [":hiro_proxy"],
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    rustc_flags = ["-Funsafe-code", "-Dunused-must-use", "-Wclippy::all", "-Wclippy::pedantic"],
+)
+
+rust_test(
+    name = "hiro_proxy_tests",
+    crate = ":hiro_proxy",
+    compile_data = glob(["src/inference/upstream/testdata/*"]),
+    deps = all_crate_deps(normal_dev = True),
+)
+
+rust_test(
+    name = "hiro_proxy_bin_tests",
+    crate = ":hiro-proxy",
+)
+
+rustfmt_test(
+    name = "format",
+    targets = [":hiro_proxy", ":hiro-proxy"],
+)
+
+rust_clippy(
+    name = "clippy",
+    testonly = True,
+    deps = [":hiro_proxy", ":hiro-proxy", ":hiro_proxy_tests", ":hiro_proxy_bin_tests"],
+)

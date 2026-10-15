@@ -1,0 +1,26 @@
+{
+  "nearaidev/cloud-api": {
+    "repository": "nearai/cloud-api",
+    "workflow": ".github/workflows/build.yml",
+    "ref": "refs/heads/main",
+    "issuer": "https://token.actions.githubusercontent.com"
+  },
+  "nearaidev/vllm-proxy-rs": {
+    "repository": "nearai/inference-proxy",
+    "workflow": ".github/workflows/build.yml",
+    "ref": "refs/heads/main",
+    "issuer": "https://token.actions.githubusercontent.com"
+  },
+  "nearaidev/compose-manager-launcher": {
+    "repository": "nearai/compose-manager",
+    "workflow": ".github/workflows/build.yml",
+    "ref": "refs/heads/master",
+    "issuer": "https://token.actions.githubusercontent.com"
+  },
+  "nearaidev/compose-manager": {
+    "repository": "nearai/compose-manager",
+    "workflow": ".github/workflows/build.yml",
+    "ref": "refs/heads/master",
+    "issuer": "https://token.actions.githubusercontent.com"
+  }
+}

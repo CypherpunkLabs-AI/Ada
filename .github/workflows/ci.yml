@@ -1,0 +1,270 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  release-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s tests -v
+
+  rust:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
+      - name: Restore Bazel downloads and compiled actions
+        id: bazel-cache
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684
+        with:
+          path: |
+            ~/.cache/hiro-bazel-repository
+            ~/.cache/hiro-bazel-actions
+            ~/.cache/bazel/_bazel_runner/*/external
+          key: bazel-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'Cargo.lock', '.bazelrc') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            bazel-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'Cargo.lock', '.bazelrc') }}-
+            bazel-v1-${{ runner.os }}-${{ runner.arch }}-
+      - run: sudo apt-get update && sudo apt-get install -y build-essential cmake pkg-config perl python3 unzip
+      - name: Install pinned Bazel
+        run: |
+          bash scripts/install-bazel "$RUNNER_TEMP/hiro-bin"
+          echo "$RUNNER_TEMP/hiro-bin" >> "$GITHUB_PATH"
+      - name: Build and check Rust targets together
+        run: |
+          bazel test --lockfile_mode=error --keep_going \
+            --repository_cache="$HOME/.cache/hiro-bazel-repository" \
+            --disk_cache="$HOME/.cache/hiro-bazel-actions" \
+            --@rules_rust//:clippy_flag=-Dwarnings \
+            //:hiro-proxy //:format //:clippy //:hiro_proxy_tests //:hiro_proxy_bin_tests
+      - name: Save Bazel cache even when a check fails
+        if: ${{ always() && steps.bazel-cache.outcome == 'success' && !cancelled() }}
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684
+        with:
+          path: |
+            ~/.cache/hiro-bazel-repository
+            ~/.cache/hiro-bazel-actions
+            ~/.cache/bazel/_bazel_runner/*/external
+          key: ${{ steps.bazel-cache.outputs.cache-primary-key }}
+
+  container-check:
+    if: github.event_name == 'pull_request'
+    needs: rust
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      - uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          push: false
+          platforms: linux/amd64
+          cache-from: type=gha,scope=hiro-proxy
+
+  release:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [rust, release-tests]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # Draft release discovery requires push access.
+      packages: read
+      attestations: read
+    outputs:
+      tag: ${{ steps.plan.outputs.tag }}
+      publish: ${{ steps.plan.outputs.publish }}
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
+      - name: Authenticate registry verification
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check the manually declared release version
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_COMMIT: ${{ github.workflow_sha }}
+        run: python3 scripts/release.py plan
+
+  publish:
+    timeout-minutes: 90
+    if: needs.release.outputs.publish == 'true'
+    needs: release
+    runs-on: ubuntu-24.04
+    env:
+      RELEASE_TAG: ${{ needs.release.outputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+      WORKFLOW_COMMIT: ${{ github.workflow_sha }}
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID || 'cypherpunklabs' }}
+      GCP_IMAGE_BUCKET: ${{ vars.GCP_IMAGE_BUCKET || 'cypherpunklabs-hiro-images' }}
+      GCP_IMAGE_PUBLISHER: ${{ vars.GCP_IMAGE_PUBLISHER || 'hiro-image-publisher@cypherpunklabs.iam.gserviceaccount.com' }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER || 'projects/1069855069526/locations/global/workloadIdentityPools/hiro-image-publisher/providers/hiro-proxy' }}
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
+      - name: Authenticate GCP publication before building
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_IMAGE_PUBLISHER }}
+          project_id: ${{ env.GCP_PROJECT_ID }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+      - name: Check Google identity federation
+        run: gcloud auth print-access-token > /dev/null
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24
+      - name: Select and authenticate the OS pinned in image-version
+        run: python3 scripts/deployment.py select --work "$RUNNER_TEMP/hiro-release"
+      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      - name: Image identity
+        id: image
+        shell: bash
+        run: |
+          name="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          {
+            echo 'tags<<IMAGES'
+            echo "$name:sha-$GITHUB_SHA"
+            echo "$name:build-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            echo "$name:$RELEASE_TAG"
+            echo 'IMAGES'
+          } >> "$GITHUB_OUTPUT"
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        id: build
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.image.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ env.RELEASE_TAG }}
+            org.opencontainers.image.licenses=AGPL-3.0-only
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=hiro-proxy
+          cache-to: type=gha,mode=max,scope=hiro-proxy
+      - name: Sign and publish image provenance
+        id: provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.image.outputs.name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+      - name: Verify published provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE: ${{ steps.image.outputs.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          WORKFLOW_COMMIT: ${{ github.workflow_sha }}
+        run: |
+          gh attestation verify "oci://${IMAGE}@${DIGEST}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
+            --signer-digest "$WORKFLOW_COMMIT" \
+            --source-digest "$GITHUB_SHA" \
+            --source-ref "$GITHUB_REF" \
+            --predicate-type https://slsa.dev/provenance/v1 \
+            --deny-self-hosted-runners
+      - name: Write deployment image metadata
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          WORKFLOW_COMMIT: ${{ github.workflow_sha }}
+          PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+        run: python3 scripts/write-image-metadata.py
+      - name: Sign deployment metadata
+        id: metadata
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/images.lock.json
+      - name: Collect metadata signature
+        env:
+          METADATA_BUNDLE: ${{ steps.metadata.outputs.bundle-path }}
+        run: cp -- "$METADATA_BUNDLE" dist/images.lock.sigstore.json
+      - name: Package the proxy and assemble its measured deployment
+        run: |
+          python3 scripts/deployment.py workload --work "$RUNNER_TEMP/hiro-release"
+          python3 scripts/deployment.py assemble --work "$RUNNER_TEMP/hiro-release"
+      - name: Sign workload, boot measurements and deployment artifacts
+        id: deployment
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-path: |
+            dist/release.json
+            dist/image-release.json
+            dist/deployment.json
+      - name: Package public proofs for the configuration disk
+        env:
+          BUNDLE: ${{ steps.deployment.outputs.bundle-path }}
+        run: |
+          cp -- "$BUNDLE" dist/release.sigstore.json
+          python3 scripts/deployment.py proof --work "$RUNNER_TEMP/hiro-release"
+      - name: Refresh Google credentials after the build
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_IMAGE_PUBLISHER }}
+          project_id: ${{ env.GCP_PROJECT_ID }}
+      - name: Publish the boot and workload GCP images
+        run: python3 scripts/publish-gcp-images.py
+      - name: Sign the GCP image identities
+        id: gcp
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-path: dist/gcp-images.json
+      - name: Collect GCP publication signature
+        env:
+          BUNDLE: ${{ steps.gcp.outputs.bundle-path }}
+        run: cp -- "$BUNDLE" dist/gcp-images.sigstore.json
+      - name: Verify, tag and publish the declared version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_COMMIT: ${{ github.workflow_sha }}
+        run: python3 scripts/release.py publish
+      - name: Retain deployment diagnostics
+        if: always() && steps.metadata.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: hiro-proxy-release-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            dist/*.json
+            dist/*.txt
+            dist/compose.yaml
+            dist/cmdline
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 90

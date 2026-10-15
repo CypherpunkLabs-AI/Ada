@@ -1,0 +1,32 @@
+{
+  "services": {
+    "hiro-proxy": {
+      "image": "${HIRO_PROXY_IMAGE:?release builder must select an image}",
+      "user": "65532:65532",
+      "ports": ["443:8443"],
+      "env_file": [{"path": "/mnt/config/secrets.env", "required": true, "format": "raw"}],
+      "environment": {
+        "HIRO_BIND_ADDRESS": "0.0.0.0:8443",
+        "HIRO_TLS_DOMAIN": "api.cypherpunklabs.io",
+        "HIRO_TDX_REPORT_DIR": "/run/hiro/tdx-report",
+        "HIRO_ATTESTATION_DIR": "/run/hiro/attestation",
+        "DOCUMENT_ROUTER_SOCKET": null,
+        "RUST_LOG": "hiro_proxy=info"
+      },
+      "volumes": [
+        {"type": "bind", "source": "/run/hiro/tls", "target": "/run/hiro/tls", "bind": {"create_host_path": false}},
+        {"type": "bind", "source": "/run/hiro/tdx-report", "target": "/run/hiro/tdx-report", "bind": {"create_host_path": false}},
+        {"type": "bind", "source": "/run/hiro/attestation", "target": "/run/hiro/attestation", "read_only": true, "bind": {"create_host_path": false}}
+      ],
+      "read_only": true,
+      "tmpfs": ["/tmp:size=16m,noexec,nosuid,nodev"],
+      "cap_drop": ["ALL"],
+      "security_opt": ["no-new-privileges:true"],
+      "ulimits": {"core": {"soft": 0, "hard": 0}},
+      "pids_limit": 128,
+      "mem_limit": "2g",
+      "memswap_limit": "2g",
+      "restart": "unless-stopped"
+    }
+  }
+}
