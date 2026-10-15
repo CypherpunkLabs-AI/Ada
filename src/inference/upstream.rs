@@ -3,10 +3,11 @@ use anyhow::{Context, Result, ensure};
 use eventsource_stream::Eventsource;
 use futures_util::{Stream, StreamExt};
 use nearai_inference_sdk::{
-    AttestationPolicy, AttestationVerificationResult, DeploymentProvenanceStatus, GatewayTlsBinding,
-    GatewayVerificationOptions, GpuEvidenceRequirement, InferenceClient,
+    AttestationPolicy, AttestationVerificationResult, DeploymentProvenanceStatus,
+    GatewayTlsBinding, GatewayVerificationOptions, GpuEvidenceRequirement, InferenceClient,
     InferenceClientOptions, InferenceError, ModelAttestationPolicy, ModelVerificationOptions,
-    SigningAlgo, SigningIdentity, TcbStatus, VerifiedCompletionAttestation, VerifiedCompletionResult,
+    SigningAlgo, SigningIdentity, TcbStatus, VerifiedCompletionAttestation,
+    VerifiedCompletionResult,
 };
 use serde_json::Value;
 use std::{
@@ -141,8 +142,7 @@ impl InferenceBackend {
             .chain(attestation.models.iter().map(|model| &model.evidence))
         {
             ensure!(
-                evidence.tcb_status == TcbStatus::UpToDate
-                    && evidence.advisory_ids.is_empty(),
+                evidence.tcb_status == TcbStatus::UpToDate && evidence.advisory_ids.is_empty(),
                 "NEAR platform status or Intel advisory rejected"
             );
             ensure!(

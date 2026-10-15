@@ -47,7 +47,7 @@ jobs:
           echo "$RUNNER_TEMP/hiro-bin" >> "$GITHUB_PATH"
       - name: Build and check Rust targets together
         run: |
-          bazel test --lockfile_mode=error --keep_going \
+          bazel test --lockfile_mode=error --keep_going --test_output=errors \
             --repository_cache="$HOME/.cache/hiro-bazel-repository" \
             --disk_cache="$HOME/.cache/hiro-bazel-actions" \
             --@rules_rust//:clippy_flag=-Dwarnings \
