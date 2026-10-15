@@ -8,6 +8,7 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tarfile
@@ -173,6 +174,69 @@ def finalize(directory, version):
                      '`platform_appraisal.launch`. Live TDX boot verification is separate from image assembly.\n')
 
 
+def three_disk_events(profile):
+    """Derive GCP's boot variables for boot/workload/config NVMe namespaces.
+
+    The firmware, ACPI and security variables remain the signed OS references.
+    EFI_LOAD_OPTION and BootOrder values are encoded explicitly; no live quote
+    or server-supplied digest selects the expected result. The single-disk
+    BootOrder and Boot0001 encodings must reproduce the authenticated baseline.
+    """
+    reference = profile['rtmr0_events']
+    require(profile['launch']['machine_type'] == 'c3-standard-4'
+            and profile['launch']['reference_disk_count'] == 1
+            and profile['launch']['boot_disk_interface'] == 'NVME'
+            and len(reference) == 14, 'unsupported GCP baseline layout')
+    def variable(name, data):
+        # EV_EFI_VARIABLE_BOOT measures VariableData, not the surrounding
+        # EFI_VARIABLE_DATA event record (GUID, lengths and variable name).
+        return {'type': 0x80000002, 'description': name + ' variable',
+                'sha384': hashlib.sha384(data).hexdigest()}
+
+    def nvme(number):
+        description = 'UEFI nvme_card-pd' + ('' if number == 1 else ' ' + str(number))
+        # ACPI PciRoot(0), PCI(4,0), NVMe(namespace, EUI64=0), End.
+        device_path = (bytes.fromhex('02010c00d041030a0000000001010600000403171000')
+                       + struct.pack('<IQ', number, 0) + bytes.fromhex('7fff0400'))
+        # Google's existing qualified boot option includes this vendor marker.
+        optional = bytes.fromhex('4eac0881119f594d850ee21a522c59b2')
+        value = (struct.pack('<IH', 1, len(device_path))
+                 + (description + '\0').encode('utf-16le') + device_path + optional)
+        return variable(f'Boot{number:04X}', value)
+
+    baseline_order = variable('BootOrder', struct.pack('<HH', 1, 0))
+    baseline_nvme = nvme(1)
+    require(reference[11]['type'] == reference[12]['type'] == reference[13]['type'] == 0x80000002
+            and reference[11]['sha384'] == baseline_order['sha384']
+            and reference[12]['sha384'] == baseline_nvme['sha384']
+            and reference[13]['description'] == 'Boot0000 UI application option',
+            'GCP boot-option encoding differs from the qualified OS firmware')
+    events = reference[:11] + [variable('BootOrder', struct.pack('<HHHH', 1, 2, 3, 0)),
+                               reference[12], nvme(2), nvme(3), reference[13]]
+    register = bytes(48)
+    for event in events:
+        register = hashlib.sha384(register + bytes.fromhex(event['sha384'])).digest()
+    return events, register.hex()
+
+
+def bind_deployment_platform(directory):
+    profile = json.loads((directory / PROFILE).read_text())
+    events, rtmr0 = three_disk_events(profile)
+    deployment = json.loads((directory / 'deployment.json').read_text())
+    appraisal = deployment['platform_appraisal']
+    require(appraisal['profile_sha256'] == digest(directory / PROFILE)
+            and appraisal['expected_boot']['rtmr0'] == profile['rtmr0'], 'base platform appraisal mismatch')
+    appraisal['base_rtmr0'] = profile['rtmr0']
+    appraisal['deployment_rtmr0_events'] = events
+    appraisal['expected_boot']['rtmr0'] = rtmr0
+    appraisal['launch'].update(disk_count=3, disk_interfaces=['NVME', 'NVME', 'NVME'],
+                               boot_order=[1, 2, 3, 0])
+    appraisal['scope'] = ('GCP c3-standard-4 with boot, workload and configuration NVMe disks in that order. '
+                          'Firmware/security/ACPI references come from the signed OS profile; '
+                          'BootOrder and added namespace boot options are calculated from this layout.')
+    write_json(directory / 'deployment.json', deployment)
+
+
 def assemble(directory, base, tools, output, root=ROOT):
     version = selected_version(root)
     run('nix', 'develop', 'path:' + str(tools.resolve()), '--command', 'python3',
@@ -182,6 +246,7 @@ def assemble(directory, base, tools, output, root=ROOT):
         if name != 'workload.tar':
             shutil.copyfile(output / name, directory / name)
     require(digest(directory / 'workload.tar') == digest(output / 'workload.tar'), 'assembler changed workload')
+    bind_deployment_platform(directory)
     finalize(directory, version)
 
 
@@ -229,6 +294,10 @@ def verify_deployment(directory, entry):
                                 'source_commit': base['source_commit'],
                                 'manifest_sha256': digest(directory / 'os-release.json')}, 'OS selection mismatch')
     appraisal = deployment['platform_appraisal']
+    if appraisal['launch'].get('disk_count') == 3:
+        events, rtmr0 = three_disk_events(json.loads((directory / PROFILE).read_text()))
+        require(appraisal['deployment_rtmr0_events'] == events
+                and appraisal['expected_boot']['rtmr0'] == rtmr0, 'deployment disk measurements mismatch')
     require(appraisal['status'] == 'included'
             and digest(directory / PROFILE) == base['files'][PROFILE]['sha256'] == appraisal['profile_sha256']
             and image['expected_measurements'] == dict(appraisal['expected_boot'], rtmr3=image['application_rtmr3']),
