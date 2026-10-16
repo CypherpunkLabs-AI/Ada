@@ -39,6 +39,16 @@
       "sequence": 4,
       "source_commit": "c4393d8cc07627aceb9eab97d28708a2aac201df",
       "tag": "v0.1.3"
+    },
+    {
+      "allow_cached_keys": false,
+      "allow_dynamic_platform": true,
+      "allow_smt": true,
+      "image_release_sha256": "b55c7099c3db22a55211ea39c1f2a0bbbf9960ce113d0eea65c3fa5d308b9319",
+      "release_sha256": "df063dd11e67ec15022586a2c96cf69143d4ecc64552fe3867f330ed57e463ed",
+      "sequence": 5,
+      "source_commit": "13992b4be907e156227a316f1ca8371f5685ea60",
+      "tag": "v0.1.4"
     }
   ],
   "endpoint": "wss://api.cypherpunklabs.io/v1/session",
