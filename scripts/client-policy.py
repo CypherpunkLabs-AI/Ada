@@ -101,6 +101,7 @@ def prepare(args):
     require(re.fullmatch('[0-9a-f]{40}', workflow_commit) and policy_ref.startswith(('refs/heads/', 'refs/tags/')),
             'policy must have an authenticated workflow revision/ref')
     publishers = config['publishers']
+    instance_owner = gcp_instance_owner(config['gcp_instance'])
     approved = []
     release_publisher = os_publisher = None
     for item in config['approved_releases']:
@@ -135,9 +136,10 @@ def prepare(args):
                 and appraisal['quote_requirements'] == profile['quote_requirements'], 'unqualified deployment profile')
         report, evaluation = qualification(os_directory, os_manifest, profile)
         platform = {name: image['expected_measurements'][name] for name in ('mrtd', 'rtmr0', 'rtmr1', 'rtmr2', 'rtmr3')}
-        for name in ('mr_seam', 'mr_signer_seam', 'mr_config_id', 'mr_owner', 'mr_owner_config',
+        for name in ('mr_seam', 'mr_signer_seam', 'mr_config_id', 'mr_owner_config',
                      'td_attributes', 'seam_attributes', 'xfam'):
             platform[name] = report[name]
+        platform['mr_owner'] = instance_owner
         platform.update(minimum_tee_tcb_svn=report['tee_tcb_svn'], minimum_tcb_evaluation=evaluation,
                         allowed_advisories=profile['quote_requirements']['allowed_advisory_ids'])
         for name in ('allow_smt', 'allow_dynamic_platform', 'allow_cached_keys'):
@@ -179,6 +181,25 @@ def prepare(args):
     write(args.output / 'client-bootstrap.json', {'endpoint': config['endpoint'],
         'policy_url': config['endpoint'].replace('wss:', 'https:').replace('/v1/session', '/v1/verification-policy'),
         'trusted_config': trust, 'trusted_roots': (args.output / 'trusted-root.json').read_text()})
+
+
+def gcp_instance_owner(instance):
+    """Google PZID: bind reviewed deployment identity, not the qualification VM.
+
+    Canonical encoding follows google/go-tdx-guest gce/PZIDPayload. Inputs are
+    authenticated Compute API resource identifiers committed in approval data;
+    neither the service being verified nor its quote selects this identity.
+    """
+    require(set(instance) == {'project_number', 'zone', 'instance_id'}, 'invalid GCP instance identity')
+    for name in ('project_number', 'instance_id'):
+        require(isinstance(instance[name], str) and re.fullmatch('[1-9][0-9]{0,19}', instance[name])
+                and int(instance[name]) <= 2**64 - 1, 'invalid GCP numeric identity')
+    require(isinstance(instance['zone'], str)
+            and re.fullmatch('[a-z][a-z0-9-]*-[a-z]', instance['zone']), 'invalid GCP zone')
+    payload = json.dumps({'instanceId': int(instance['instance_id']),
+                          'numericalProjectId': int(instance['project_number']),
+                          'zone': instance['zone']}, separators=(',', ':'))
+    return hashlib.sha384(payload.encode('ascii')).hexdigest()
 
 
 def seal(args):

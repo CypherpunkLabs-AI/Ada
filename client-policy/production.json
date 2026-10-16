@@ -32,6 +32,11 @@
     }
   ],
   "endpoint": "wss://api.cypherpunklabs.io/v1/session",
+  "gcp_instance": {
+    "instance_id": "6981755009540883484",
+    "project_number": "1069855069526",
+    "zone": "us-central1-a"
+  },
   "max_challenge_age_seconds": 120,
   "max_policy_age_seconds": 259200,
   "max_recipient_age_seconds": 300,

@@ -25,13 +25,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          signer=client-policy-signer-v1
+          signer=client-policy-signer-v2
           if ! gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$signer" >/dev/null 2>&1; then
             gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$signer" -f sha="$GITHUB_SHA"
           fi
           gh workflow run client-policy.yml --repo "$GITHUB_REPOSITORY" --ref "$signer"
   approve:
-    if: github.ref == 'refs/tags/client-policy-signer-v1'
+    if: github.ref == 'refs/tags/client-policy-signer-v2'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
