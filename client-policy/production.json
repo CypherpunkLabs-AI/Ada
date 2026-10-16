@@ -19,13 +19,23 @@
       "sequence": 2,
       "source_commit": "f0399a374cf64de4f79b1f9d6e8d0b609aae20c6",
       "tag": "v0.1.1"
+    },
+    {
+      "allow_cached_keys": false,
+      "allow_dynamic_platform": true,
+      "allow_smt": true,
+      "image_release_sha256": "7238088599b33f95775fc6863c80d15e878d52b27b008f7458e24375ef556be2",
+      "release_sha256": "91cf938129375a60eb1ea3af6ba31ec093e218dbc42b44fa7ce461d36f98c3b9",
+      "sequence": 3,
+      "source_commit": "4c674bbd7c43a69430e7928dc069c60ce636d1eb",
+      "tag": "v0.1.2"
     }
   ],
   "endpoint": "wss://api.cypherpunklabs.io/v1/session",
   "max_challenge_age_seconds": 120,
   "max_policy_age_seconds": 259200,
   "max_recipient_age_seconds": 300,
-  "minimum_release_sequence": 2,
+  "minimum_release_sequence": 3,
   "policy_id": "hiro.gcp-tdx.production.v1",
   "policy_repository": "CypherpunkLabs-AI/hiro",
   "policy_workflow": ".github/workflows/client-policy.yml",
