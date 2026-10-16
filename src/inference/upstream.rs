@@ -324,6 +324,27 @@ async fn verified_response(client: &InferenceClient, id: &str) -> Result<Verifie
 )]
 fn sdk_error(error: InferenceError) -> anyhow::Error {
     // Never expose provider error bodies, request URLs or prompt contents.
+    if let InferenceError::Verification(
+        nearai_inference_sdk::VerificationError::TcbStatusNotAllowed {
+            actual,
+            accepted,
+            advisory_ids,
+        },
+    ) = &error
+    {
+        return anyhow::anyhow!(
+            "NEAR inference failed ({}; actual {actual:?}; accepted {accepted:?}; Intel advisories {advisory_ids:?})",
+            error.code()
+        );
+    }
+    if let InferenceError::Api(nearai_inference_sdk::ApiError::HttpStatus { resource, status }) =
+        &error
+    {
+        return anyhow::anyhow!(
+            "NEAR inference failed ({}; {resource}; HTTP {status})",
+            error.code()
+        );
+    }
     anyhow::anyhow!("NEAR inference failed ({})", error.code())
 }
 

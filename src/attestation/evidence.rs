@@ -5,7 +5,8 @@ use aci_protocol::{
     receipt::receipt_signing_input,
     types::{SourceProvenance, WorkloadKeyset},
 };
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
+use base64::{Engine, engine::general_purpose::STANDARD};
 use serde_json::{Value, json};
 
 #[must_use]
@@ -83,12 +84,26 @@ impl AttestedSession {
                 && now_secs() < expires_at,
             "expired upstream evidence"
         );
+        // ACI carries exact evidence bytes and their digest, rather than the
+        // provider-specific object directly in the session's evidence field.
+        let evidence = digest::jcs_bytes(&event.evidence)?;
+        let spki = event
+            .evidence
+            .pointer("/gateway/tls_binding/spki_sha256")
+            .and_then(Value::as_str)
+            .context("missing verified upstream TLS binding")?;
+        let origin = reqwest::Url::parse(&event.origin)?
+            .origin()
+            .ascii_serialization();
         let unknown = json!({"status":"unknown"});
         let value = json!({
             "api_version":"aci/1", "upstream_name":"nearai",
             "endpoint":event.origin, "verifier_id":"nearai-inference-sdk",
             "established_at":event.established_at, "expires_at":expires_at,
             "identity":null, "completed_at":event.completed_at,
+            "channel_binding":[{
+                "type":"tls_spki_sha256", "origin":origin, "spki_sha256":spki
+            }],
             "claims":{
                 "tee_attested":{"status":"asserted", "source":"verifier_derived",
                     "reason":"NEAR SDK verified gateway/model TDX evidence, nonce, measured deployment and key binding"},
@@ -99,7 +114,10 @@ impl AttestedSession {
                 "os_known_good":unknown, "serving_software_known_good":unknown,
                 "model_weights_provenance":unknown
             },
-            "evidence":event.evidence,
+            "evidence":{
+                "digest":digest::sha256_hex(&evidence),
+                "data":format!("data:application/json;base64,{}", STANDARD.encode(&evidence))
+            },
         });
         let bytes = digest::jcs_bytes(&value)?;
         ensure!(
@@ -175,6 +193,9 @@ impl Receipt {
             now_secs() < session.expires_at,
             "completion evidence expired"
         );
+        // The draft predates upstream attestation. Serving happened after that
+        // session was established, not when the incoming request was queued.
+        self.document["served_at"] = json!(event.completed_at);
         self.document["event_log"]
             .as_array_mut()
             .expect("receipt event array")
