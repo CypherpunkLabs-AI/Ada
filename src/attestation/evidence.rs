@@ -96,6 +96,13 @@ impl AttestedSession {
             .origin()
             .ascii_serialization();
         let unknown = json!({"status":"unknown"});
+        let tcb = if event.tcb_up_to_date {
+            json!({"status":"asserted", "source":"verifier_derived",
+                "reason":"Every verified gateway and model quote reports UpToDate"})
+        } else {
+            json!({"status":"unknown", "source":"verifier_derived",
+                "reason":"UpToDate is not asserted: a verified quote reports OutOfDate, accepted by the NEAR SDK default policy; actual statuses and advisories are included in evidence"})
+        };
         let value = json!({
             "api_version":"aci/1", "upstream_name":"nearai",
             "endpoint":event.origin, "verifier_id":"nearai-inference-sdk",
@@ -108,9 +115,9 @@ impl AttestedSession {
                 "tee_attested":{"status":"asserted", "source":"verifier_derived",
                     "reason":"NEAR SDK verified gateway/model TDX evidence, nonce, measured deployment and key binding"},
                 "gpu_attested":{"status":"asserted", "source":"verifier_derived", "reason":"Required NVIDIA evidence verified by NEAR SDK"},
-                "tcb_up_to_date":{"status":"asserted", "source":"verifier_derived", "reason":"UpToDate required for gateway and model"},
+                "tcb_up_to_date":tcb,
                 "measured_image_provenance":{"status":"asserted", "source":"verifier_derived",
-                    "reason":"Every image in gateway/model measured Compose matched the trusted publisher/workflow policy and SDK-verified Sigstore build provenance"},
+                    "reason":"The required measured gateway and model-launcher images matched trusted NEAR publisher/workflow identities and SDK-verified Sigstore build provenance; supporting and later-loaded images are not covered"},
                 "os_known_good":unknown, "serving_software_known_good":unknown,
                 "model_weights_provenance":unknown
             },

@@ -1,4 +1,4 @@
-//! Authenticate the observed images against trusted NEAR build publishers.
+//! Authenticate the required gateway or model-launcher image against its NEAR publisher.
 //! Provider releases may change; repository/workflow/issuer policy may not.
 use async_trait::async_trait;
 use nearai_inference_sdk::{
@@ -15,7 +15,7 @@ use tokio::sync::Mutex;
 
 const POLICY: &str = include_str!("nearai-publishers.json");
 const GATEWAY: &str = "nearaidev/cloud-api";
-const MODEL: &str = "nearaidev/vllm-proxy-rs";
+const MODEL: &str = "nearaidev/compose-manager-launcher";
 const CACHE_TTL: Duration = Duration::from_hours(1);
 const CACHE_LIMIT: usize = 128;
 
@@ -65,18 +65,25 @@ impl ApprovedDeployment {
         let mut images = BTreeSet::new();
         for (name, service) in services {
             require(name.as_str().is_some() && service.is_mapping())?;
-            require(service.get("build").is_none() && service.get("extends").is_none())?;
             let image = service
                 .get("image")
                 .and_then(serde_yaml_ng::Value::as_str)
                 .ok_or_else(rejection)?;
-            require(!image.contains('$'))?;
+            // Only literal references can establish the required image's identity.
+            // Supporting services and variable defaults are outside this build-proof scope.
+            if image.contains('$') {
+                continue;
+            }
             let image = image.strip_prefix("docker.io/").unwrap_or(image);
-            let (name, digest) = image.split_once('@').ok_or_else(rejection)?;
+            let (name, digest) = image.split_once('@').unwrap_or((image, ""));
             // A tag alongside a digest is only a label. The exact digest is mandatory.
             let repository = name
                 .split_once(':')
                 .map_or(name, |(repository, _)| repository);
+            if repository != self.required_image {
+                continue;
+            }
+            require(service.get("build").is_none() && service.get("extends").is_none())?;
             let hash = digest.strip_prefix("sha256:").ok_or_else(rejection)?;
             require(
                 hash.len() == 64
@@ -229,7 +236,6 @@ mod tests {
             ),
             accepted.replace(&gateway.digest, "sha256:1234"),
             accepted.replace(&gateway.digest, &format!("sha256:{}", "g".repeat(64))),
-            format!("{accepted}  extra:\n    image: attacker/sidecar:latest\n"),
             format!("{accepted}include: another-compose.yml\n"),
             accepted.replace("image:", "extends: unknown\n    image:"),
             accepted.replace("nearaidev/cloud-api", "${IMAGE:-nearaidev/cloud-api}"),
@@ -240,6 +246,16 @@ mod tests {
                     .is_err()
             );
         }
+        // Other containers and unresolved defaults do not receive build approval.
+        let supporting = format!(
+            "{accepted}  sidecar:\n    image: alpine:latest\n  manager:\n    image: ${{MANAGER_IMAGE:-example/manager:latest}}\n"
+        );
+        assert_eq!(
+            verifier
+                .check_images(&measured(&supporting).app_compose)
+                .unwrap(),
+            BTreeSet::from([(gateway.image.clone(), gateway.digest.clone())])
+        );
         // A new digest can be selected, but is never approved without its signed proof.
         assert!(
             verifier

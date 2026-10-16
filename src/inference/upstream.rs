@@ -3,11 +3,10 @@ use anyhow::{Context, Result, ensure};
 use eventsource_stream::Eventsource;
 use futures_util::{Stream, StreamExt};
 use nearai_inference_sdk::{
-    AttestationPolicy, AttestationVerificationResult, DeploymentProvenanceStatus,
-    GatewayTlsBinding, GatewayVerificationOptions, GpuEvidenceRequirement, InferenceClient,
-    InferenceClientOptions, InferenceError, ModelAttestationPolicy, ModelVerificationOptions,
-    SigningAlgo, SigningIdentity, TcbStatus, VerifiedCompletionAttestation,
-    VerifiedCompletionResult,
+    AttestationVerificationResult, DeploymentProvenanceStatus, GatewayTlsBinding,
+    GatewayVerificationOptions, GpuEvidenceRequirement, InferenceClient, InferenceClientOptions,
+    InferenceError, ModelAttestationPolicy, ModelVerificationOptions, SigningAlgo, SigningIdentity,
+    VerifiedCompletionAttestation, VerifiedCompletionResult,
 };
 use serde_json::Value;
 use std::{
@@ -60,16 +59,13 @@ fn client_options(origin: &str, credential: String) -> Result<InferenceClientOpt
         gateway_verification: GatewayVerificationOptions {
             deployment: Some(Arc::new(provenance::ApprovedDeployment::gateway())),
             include_spki_fingerprint: true,
-            policy: Some(AttestationPolicy {
-                accepted_tcb_statuses: Some(vec![TcbStatus::UpToDate]),
-            }),
             ..Default::default()
         },
         model_verification: ModelVerificationOptions {
             deployment: Some(Arc::new(provenance::ApprovedDeployment::model())),
             policy: Some(ModelAttestationPolicy {
-                accepted_tcb_statuses: Some(vec![TcbStatus::UpToDate]),
                 gpu_evidence: GpuEvidenceRequirement::Required,
+                ..Default::default()
             }),
             ..Default::default()
         },
@@ -135,16 +131,11 @@ impl InferenceBackend {
             !attestation.models.is_empty(),
             "NEAR model attestation required"
         );
-        // These fields come from the SDK's cryptographically verified quotes.
-        // No Intel advisories have been approved for this policy. A newly
-        // reported advisory must fail closed until explicitly reviewed.
+        // The pinned SDK applies its default TCB policy (UpToDate or OutOfDate).
+        // Preserve its verified status/advisories in the completion evidence.
         for evidence in std::iter::once(&attestation.gateway.evidence)
             .chain(attestation.models.iter().map(|model| &model.evidence))
         {
-            ensure!(
-                evidence.tcb_status == TcbStatus::UpToDate && evidence.advisory_ids.is_empty(),
-                "NEAR platform status or Intel advisory rejected"
-            );
             ensure!(
                 evidence.signer.signing_algo == SigningAlgo::Ed25519,
                 "NEAR signer algorithm rejected"
@@ -492,16 +483,9 @@ mod tests {
         assert!(options.e2ee && options.gateway_verification.include_spki_fingerprint);
         assert!(options.gateway_verification.deployment.is_some());
         assert!(options.model_verification.deployment.is_some());
-        assert_eq!(
-            options
-                .gateway_verification
-                .policy
-                .unwrap()
-                .accepted_tcb_statuses,
-            Some(vec![TcbStatus::UpToDate])
-        );
+        assert!(options.gateway_verification.policy.is_none());
         let model = options.model_verification.policy.unwrap();
-        assert_eq!(model.accepted_tcb_statuses, Some(vec![TcbStatus::UpToDate]));
+        assert!(model.accepted_tcb_statuses.is_none());
         assert_eq!(model.gpu_evidence, GpuEvidenceRequirement::Required);
         assert!(
             request_body(

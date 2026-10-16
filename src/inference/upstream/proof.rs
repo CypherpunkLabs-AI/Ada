@@ -1,7 +1,7 @@
 //! Serialize SDK-verified facts for Hiro's signed completion envelope.
 use nearai_inference_sdk::{
     AttestationVerificationResult, DeploymentProvenanceStatus, GatewayTlsBinding,
-    GpuEvidenceStatus, VerifiedAttestationEvidence, VerifiedCompletionResult,
+    GpuEvidenceStatus, TcbStatus, VerifiedAttestationEvidence, VerifiedCompletionResult,
 };
 use serde_json::{Value, json};
 
@@ -10,6 +10,7 @@ pub(crate) struct VerifiedInference {
     pub origin: String,
     pub established_at: u64,
     pub completed_at: u64,
+    pub tcb_up_to_date: bool,
     pub evidence: Value,
 }
 
@@ -31,20 +32,27 @@ impl VerifiedInference {
             origin: origin.to_owned(),
             established_at: preflight.verified_at / 1000,
             completed_at: crate::attestation::evidence::now_secs(),
+            tcb_up_to_date: std::iter::once(&preflight.gateway.evidence)
+                .chain(preflight.models.iter().map(|model| &model.evidence))
+                .all(|evidence| evidence.tcb_status == TcbStatus::UpToDate),
             evidence: json!({
                 "schema":"hiro.nearai-inference.v1",
                 "basis":"sdk_verified_claims",
                 "sdk_revision":"14b29f67b63b97bf63678296e095ddfcc8f5ba74",
                 "image_provenance_policy": {
                     "digest":super::provenance::policy_digest(),
-                    "coverage":"all_images_in_measured_compose",
+                    "coverage":"required_gateway_and_model_launcher_images",
+                    "required_gateway_image":"nearaidev/cloud-api",
+                    "required_model_image":"nearaidev/compose-manager-launcher",
+                    "supporting_images_covered":false,
                     "approval":"publisher_workflow",
                     "runtime_loaded_images_covered":false,
                 },
                 "verified_at_ms":preflight.verified_at,
                 "acceptance_policy":{
-                    "tcb_status":"UpToDate",
-                    "intel_advisories":"reject_all",
+                    "tcb_policy":"nearai_sdk_default",
+                    "accepted_tcb_statuses":["UpToDate", "OutOfDate"],
+                    "intel_advisories":"reported_by_sdk",
                     "signing_algorithm":"ed25519",
                     "fresh_preflight_per_completion":true,
                     "maximum_preflight_age_at_dispatch_seconds":super::PREFLIGHT_TIMEOUT.as_secs(),
