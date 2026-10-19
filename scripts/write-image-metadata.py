@@ -30,7 +30,7 @@ def main():
     document = {
         "schema": 1,
         "services": {
-            "hiro-proxy": {
+            "ada-proxy": {
                 "release_tag": tag,
                 "image": image,
                 "digest": digest,
@@ -39,7 +39,7 @@ def main():
                 "source_ref": ref,
                 "build_workflow": ".github/workflows/ci.yml",
                 "workflow_commit": workflow_commit,
-                "runtime_profile": "hiro.gcp-tdx.v1",
+                "runtime_profile": "ada.gcp-tdx.v1",
             }
         },
     }
@@ -50,8 +50,8 @@ def main():
     (output / "image-digest.txt").write_text(digest + "\n")
     shutil.copyfile(os.environ["PROVENANCE_BUNDLE"], output / "image.sigstore.json")
     (output / "release-notes.md").write_text(
-        f"Hiro proxy {tag}\n\nSource: `{commit}`\n\nImage: `{image}@{digest}`\n\n"
-        "Runtime profile: `hiro.gcp-tdx.v1`. Linux amd64, UID/GID 65532, TLS port 8443.\n"
+        f"Ada proxy {tag}\n\nSource: `{commit}`\n\nImage: `{image}@{digest}`\n\n"
+        "Runtime profile: `ada.gcp-tdx.v1`. Linux amd64, UID/GID 65532, TLS port 8443.\n"
     )
     with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
         summary.write(f"## Published proxy image\n\n`{image}@{digest}`\n\n")

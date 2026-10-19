@@ -2117,8 +2117,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "hiro-proxy"
-version = "0.1.4"
+name = "ada-proxy"
+version = "0.2.0"
 dependencies = [
  "aci-protocol",
  "anyhow",

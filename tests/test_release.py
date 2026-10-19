@@ -27,9 +27,9 @@ DIGEST = "sha256:" + "b" * 64
 
 
 def cargo_files(root, version="2.7.9", locked=None):
-    (root / "Cargo.toml").write_text(f'[package]\nname = "hiro-proxy"\nversion = "{version}"\n')
+    (root / "Cargo.toml").write_text(f'[package]\nname = "ada-proxy"\nversion = "{version}"\n')
     (root / "Cargo.lock").write_text(
-        f'[[package]]\nname = "hiro-proxy"\nversion = "{version if locked is None else locked}"\n')
+        f'[[package]]\nname = "ada-proxy"\nversion = "{version if locked is None else locked}"\n')
 
 
 def assets(root, tag=TAG, commit=COMMIT):
@@ -37,10 +37,10 @@ def assets(root, tag=TAG, commit=COMMIT):
     entry = {
         "release_tag": tag, "source_commit": commit, "workflow_commit": commit,
         "source_repository": REPOSITORY, "source_ref": "refs/heads/main",
-        "build_workflow": ".github/workflows/ci.yml", "runtime_profile": "hiro.gcp-tdx.v1",
+        "build_workflow": ".github/workflows/ci.yml", "runtime_profile": "ada.gcp-tdx.v1",
         "image": "ghcr.io/example/proxy", "digest": DIGEST,
     }
-    (root / "images.lock.json").write_text(json.dumps({"schema": 1, "services": {"hiro-proxy": entry}}))
+    (root / "images.lock.json").write_text(json.dumps({"schema": 1, "services": {"ada-proxy": entry}}))
     for name in ["image.sigstore.json", "images.lock.sigstore.json"]:
         (root / name).write_text("test signature bundle")
     (root / "image-ref.txt").write_text(entry["image"] + "@" + DIGEST + "\n")
@@ -257,8 +257,8 @@ class Publication(unittest.TestCase):
         finally:
             os.chdir(original)
         document = json.loads((self.dist / "images.lock.json").read_text())
-        self.assertEqual(document["services"]["hiro-proxy"]["release_tag"], TAG)
-        self.assertEqual(document["services"]["hiro-proxy"]["digest"], DIGEST)
+        self.assertEqual(document["services"]["ada-proxy"]["release_tag"], TAG)
+        self.assertEqual(document["services"]["ada-proxy"]["digest"], DIGEST)
 
 
 if __name__ == "__main__":

@@ -14,8 +14,8 @@ use std::{
 };
 use tokio::sync::{Mutex, Semaphore};
 
-pub const PROFILE: &str = "hiro.gcp-tdx.v1";
-const RELEASE_DOMAIN: &[u8] = b"hiro.release.v1\0";
+pub const PROFILE: &str = "ada.gcp-tdx.v1";
+const RELEASE_DOMAIN: &[u8] = b"ada.release.v1\0";
 const MAX_QUOTE: usize = 128 * 1024;
 const MAX_RELEASE: usize = 256 * 1024;
 const MAX_IMAGE_RELEASE: usize = 512 * 1024;
@@ -190,7 +190,7 @@ fn validate_release_proof(release: &[u8], image: &[u8], bundle: &[u8]) -> anyhow
     let workload: Value = serde_json::from_slice(release)?;
     let manifest: Value = serde_json::from_slice(image)?;
     ensure!(
-        manifest["schema"] == 1 && manifest["profile"] == "hiro.gcp-tdx.boot.v1",
+        manifest["schema"] == 1 && manifest["profile"] == "ada.gcp-tdx.boot.v1",
         "unsupported image release proof"
     );
     let commit = workload["source_commit"]
@@ -276,7 +276,7 @@ fn validate_release(bytes: &[u8]) -> anyhow::Result<()> {
     let containers = release["containers"]
         .as_object()
         .context("missing release containers")?;
-    ensure!(containers.contains_key("hiro-proxy"), "release omits proxy");
+    ensure!(containers.contains_key("ada-proxy"), "release omits proxy");
     for image in containers.values() {
         let (name, digest) = image
             .as_str()
@@ -335,7 +335,7 @@ mod tests {
         }))
         .unwrap();
         let image = serde_json::to_vec_pretty(&json!({
-            "schema": 1, "profile": "hiro.gcp-tdx.boot.v1", "source_commit": "a".repeat(40),
+            "schema": 1, "profile": "ada.gcp-tdx.boot.v1", "source_commit": "a".repeat(40),
             "workload_release_sha256": hex::encode(Sha256::digest(&release)),
             "application_rtmr3": hex::encode(release_rtmr(&release)),
         }))
@@ -372,7 +372,7 @@ mod tests {
 
     #[test]
     fn proof_loading_preserves_signed_bytes_and_requires_both_files() {
-        let dir = std::env::temp_dir().join(format!("hiro-proof-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("ada-proof-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir(&dir).unwrap();
         let (release, image, bundle) = proof_fixture();
         assert!(release_proof(&dir, &release).is_err());
@@ -393,13 +393,13 @@ mod tests {
 
     #[test]
     fn release_requires_immutable_container_identity() {
-        let mut release = json!({"schema":1,"profile":PROFILE,"compose_sha256":"a".repeat(64),"containers":{"hiro-proxy":format!("ghcr.io/example/proxy@sha256:{}", "b".repeat(64))}});
+        let mut release = json!({"schema":1,"profile":PROFILE,"compose_sha256":"a".repeat(64),"containers":{"ada-proxy":format!("ghcr.io/example/proxy@sha256:{}", "b".repeat(64))}});
         let bytes = serde_json::to_vec(&release).unwrap();
         validate_release(&bytes).unwrap();
         let mut modified = bytes.clone();
         modified.push(b'\n');
         assert_ne!(release_rtmr(&bytes), release_rtmr(&modified));
-        release["containers"]["hiro-proxy"] = json!("ghcr.io/example/proxy:latest");
+        release["containers"]["ada-proxy"] = json!("ghcr.io/example/proxy:latest");
         assert!(validate_release(&serde_json::to_vec(&release).unwrap()).is_err());
         assert!(validate_quote(&[], &[0; 64], &bytes).is_err());
     }
@@ -425,7 +425,7 @@ mod tests {
 
     #[test]
     fn evidence_files_are_bounded_and_symlinks_rejected() {
-        let dir = std::env::temp_dir().join(format!("hiro-evidence-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("ada-evidence-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir(&dir).unwrap();
         let file = dir.join("file");
         std::fs::write(&file, b"12345").unwrap();
@@ -438,9 +438,9 @@ mod tests {
 
     #[tokio::test]
     async fn no_hardware_never_becomes_successful_evidence() {
-        let missing = PathBuf::from(format!("/nonexistent-hiro-{}", uuid::Uuid::new_v4()));
+        let missing = PathBuf::from(format!("/nonexistent-ada-{}", uuid::Uuid::new_v4()));
         let attester = Attester::new(missing.clone(), missing).unwrap();
         assert!(attester.evidence([0; 64]).await.is_err());
-        assert!(Attester::new("relative".into(), "/run/hiro".into()).is_err());
+        assert!(Attester::new("relative".into(), "/run/ada".into()).is_err());
     }
 }

@@ -42,9 +42,9 @@ impl Config {
     /// # Errors
     /// Rejects invalid configuration or unavailable required confidential services.
     pub fn from_env() -> anyhow::Result<Self> {
-        let bind_address = value_or("HIRO_BIND_ADDRESS", "0.0.0.0:8443")
+        let bind_address = value_or("ADA_BIND_ADDRESS", "0.0.0.0:8443")
             .parse()
-            .context("HIRO_BIND_ADDRESS must be a socket address")?;
+            .context("ADA_BIND_ADDRESS must be a socket address")?;
         let stripe_api_url =
             reqwest::Url::parse(&value_or("STRIPE_API_URL", "https://api.stripe.com/"))
                 .context("invalid STRIPE_API_URL")?;
@@ -60,23 +60,23 @@ impl Config {
             r2: r2_config()?,
             bind_address,
             tls: crate::tls::Config::new(
-                required("HIRO_TLS_DOMAIN")?,
-                &value_or("HIRO_ACME_ENVIRONMENT", "production"),
+                required("ADA_TLS_DOMAIN")?,
+                &value_or("ADA_ACME_ENVIRONMENT", "production"),
             )?,
-            tdx_report_dir: value_or("HIRO_TDX_REPORT_DIR", "/run/hiro/tdx-report").into(),
-            attestation_dir: value_or("HIRO_ATTESTATION_DIR", "/run/hiro/attestation").into(),
+            tdx_report_dir: value_or("ADA_TDX_REPORT_DIR", "/run/ada/tdx-report").into(),
+            attestation_dir: value_or("ADA_ATTESTATION_DIR", "/run/ada/attestation").into(),
             nearai_base_url: value_or(
                 "NEARAI_BASE_URL",
                 nearai_inference_sdk::DEFAULT_NEAR_AI_CLOUD_BASE_URL,
             ),
             nearai_api_key: required("NEARAI_API_KEY")?.into(),
             inference_timeout: seconds("NEARAI_TIMEOUT_SECONDS", 600, 10, 3_600)?,
-            keyset_ttl: seconds("HIRO_KEYSET_TTL_SECONDS", 2_592_000, 3_600, 31_536_000)?,
-            receipt_ttl: seconds("HIRO_RECEIPT_TTL_SECONDS", 3_600, 60, 86_400)?,
-            source_repository: required("HIRO_SOURCE_REPOSITORY")?,
-            source_commit: required("HIRO_SOURCE_COMMIT")?,
-            image_digest: optional("HIRO_IMAGE_DIGEST"),
-            subject: optional("HIRO_ATTESTED_SUBJECT"),
+            keyset_ttl: seconds("ADA_KEYSET_TTL_SECONDS", 2_592_000, 3_600, 31_536_000)?,
+            receipt_ttl: seconds("ADA_RECEIPT_TTL_SECONDS", 3_600, 60, 86_400)?,
+            source_repository: required("ADA_SOURCE_REPOSITORY")?,
+            source_commit: required("ADA_SOURCE_COMMIT")?,
+            image_digest: optional("ADA_IMAGE_DIGEST"),
+            subject: optional("ADA_ATTESTED_SUBJECT"),
         })
     }
 }

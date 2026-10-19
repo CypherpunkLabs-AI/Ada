@@ -15,15 +15,15 @@ COPY MODULE.bazel MODULE.bazel.lock BUILD.bazel .bazelrc .bazelignore Cargo.toml
 COPY src ./src
 
 RUN --mount=type=cache,target=/root/.cache/bazel,sharing=locked \
-    bazel build --config=release --lockfile_mode=error //:hiro-proxy \
-    && install -D -m 0755 bazel-bin/hiro-proxy /out/hiro-proxy
+    bazel build --config=release --lockfile_mode=error //:ada-proxy \
+    && install -D -m 0755 bazel-bin/ada-proxy /out/ada-proxy
 
 FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587 AS runtime
 
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
-COPY --from=builder --chown=65532:65532 /out/hiro-proxy /usr/local/bin/hiro-proxy
+COPY --from=builder --chown=65532:65532 /out/ada-proxy /usr/local/bin/ada-proxy
 
 USER 65532:65532
 EXPOSE 8443
-ENTRYPOINT ["/usr/local/bin/hiro-proxy"]
+ENTRYPOINT ["/usr/local/bin/ada-proxy"]

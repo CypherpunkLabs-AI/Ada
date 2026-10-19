@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Authenticate selected Hiro releases and publish client authorization metadata.
+"""Authenticate selected Ada releases and publish client authorization metadata.
 
 All approvals originate in reviewed client-policy/production.json. Downloads
 never add approvals. No secrets or private signing keys are stored here.
@@ -106,7 +106,7 @@ def prepare(args):
     release_publisher = os_publisher = None
     for item in config['approved_releases']:
         directory = args.work / item['tag']
-        download(publishers['hiro']['repository'], item['tag'], directory,
+        download(publishers['ada']['repository'], item['tag'], directory,
                  ['release.json', 'image-release.json', 'release.sigstore.json'])
         require(sha(directory / 'release.json') == item['release_sha256']
                 and sha(directory / 'image-release.json') == item['image_release_sha256'],
@@ -116,16 +116,16 @@ def prepare(args):
         require(release['source_commit'] == item['source_commit'] and release['tag'] == item['tag'],
                 'approved release source/version mismatch')
         for name in ('release.json', 'image-release.json'):
-            authenticate(directory / name, directory / 'release.sigstore.json', publishers['hiro'],
+            authenticate(directory / name, directory / 'release.sigstore.json', publishers['ada'],
                          item['source_commit'], 'refs/heads/main')
         require(image['workload_release_sha256'] == item['release_sha256']
                 and image['source_commit'] == item['source_commit'], 'workload/boot image mismatch')
         os_directory = args.work / ('os-' + release['os_version'])
-        download(publishers['hiro-image']['repository'], release['os_version'], os_directory,
+        download(publishers['ada-image']['repository'], release['os_version'], os_directory,
                  ['os-release.json', 'os-release.sigstore.json', 'gcp-tdx-platform-profile.json', 'platform-evidence.tar.gz'])
         os_manifest = read(os_directory / 'os-release.json')
         authenticate(os_directory / 'os-release.json', os_directory / 'os-release.sigstore.json',
-                     publishers['hiro-image'], os_manifest['source_commit'], 'refs/tags/' + release['os_version'])
+                     publishers['ada-image'], os_manifest['source_commit'], 'refs/tags/' + release['os_version'])
         require(image['os_release_manifest'].encode() == (os_directory / 'os-release.json').read_bytes(),
                 'application selected a different OS release')
         profile_path = os_directory / 'gcp-tdx-platform-profile.json'
@@ -149,8 +149,8 @@ def prepare(args):
                          'release_workflow_commit': item['source_commit'],
                          'os_workflow_commit': os_manifest['workflow_commit'],
                          'sequence': item['sequence'], 'platform': platform})
-        rp = dict(publishers['hiro'], workflow_commit=item['source_commit'])
-        op = dict(publishers['hiro-image'], workflow_commit=os_manifest['workflow_commit'])
+        rp = dict(publishers['ada'], workflow_commit=item['source_commit'])
+        op = dict(publishers['ada-image'], workflow_commit=os_manifest['workflow_commit'])
         # The bootstrap fixes publisher identities. Each signed approval pins
         # its own exact revisions, allowing reviewed upgrades without changing
         # the client's policy authority or trusting a server-selected revision.
@@ -165,7 +165,7 @@ def prepare(args):
               'minimum_release_sequence': config['minimum_release_sequence'],
               'approved_releases': [a['release_sha256'] for a in approved], 'revoked_releases': sorted(set(revoked)),
               'platforms': [], 'kms': [], 'gcp_releases': approved}
-    publisher = dict(publishers['hiro'], workflow=config['policy_workflow'], workflow_commit=workflow_commit)
+    publisher = dict(publishers['ada'], workflow=config['policy_workflow'], workflow_commit=workflow_commit)
     trust = {name: config[name] for name in ('policy_id', 'service', 'workload_subject', 'max_policy_age_seconds',
                                             'max_challenge_age_seconds', 'max_recipient_age_seconds')}
     trust.update(schema=1, recipient='oak-session-v1-ed25519', trust_root_sha256=sha(ROOT / 'client-policy/trusted-root.json'),
@@ -219,7 +219,7 @@ def select(args):
     require(args.release and args.sequence and args.sequence > 0,
             'select requires --release vX.Y.Z and a positive --sequence')
     config = read(args.approvals)
-    publisher = config['publishers']['hiro']
+    publisher = config['publishers']['ada']
     directory = args.work / args.release
     download(publisher['repository'], args.release, directory,
              ['release.json', 'image-release.json', 'release.sigstore.json'])

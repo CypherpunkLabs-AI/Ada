@@ -100,7 +100,7 @@ pub(crate) async fn process_upload(state: &DocumentGateway, upload: Upload) -> R
         .post(&state.convert_url)
         .query(&[("mode", upload.mode.as_str())])
         .header("content-type", &upload.media_type)
-        .header("x-hiro-document-filename", &upload.filename)
+        .header("x-ada-document-filename", &upload.filename)
         .body(bytes)
         .send()
         .await?;

@@ -41,13 +41,13 @@ impl Config {
     pub fn new(domain: String, environment: &str) -> anyhow::Result<Self> {
         ensure!(
             domain.contains('.') && !domain.ends_with('.') && domain == domain.to_ascii_lowercase(),
-            "HIRO_TLS_DOMAIN must be a lowercase, fully qualified DNS hostname"
+            "ADA_TLS_DOMAIN must be a lowercase, fully qualified DNS hostname"
         );
-        rustls::pki_types::DnsName::try_from(domain.clone()).context("invalid HIRO_TLS_DOMAIN")?;
+        rustls::pki_types::DnsName::try_from(domain.clone()).context("invalid ADA_TLS_DOMAIN")?;
         let production = match environment {
             "production" => true,
             "staging" => false,
-            _ => anyhow::bail!("HIRO_ACME_ENVIRONMENT must be production or staging"),
+            _ => anyhow::bail!("ADA_ACME_ENVIRONMENT must be production or staging"),
         };
         Ok(Self { domain, production })
     }

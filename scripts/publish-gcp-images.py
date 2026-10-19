@@ -13,7 +13,7 @@ def main():
     project, bucket = os.environ['GCP_PROJECT_ID'], os.environ['GCP_IMAGE_BUCKET']
     require(re.fullmatch('[a-z][a-z0-9-]{4,61}[a-z0-9]', project), 'invalid GCP project')
     require(re.fullmatch('[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]', bucket), 'invalid bucket name')
-    entry = json.loads((directory / 'images.lock.json').read_text())['services']['hiro-proxy']
+    entry = json.loads((directory / 'images.lock.json').read_text())['services']['ada-proxy']
     commit, repository = os.environ['GITHUB_SHA'], os.environ['GITHUB_REPOSITORY']
     require(entry['source_commit'] == commit == os.environ['WORKFLOW_COMMIT']
             and entry['source_repository'] == repository and os.environ['GITHUB_REF'] == 'refs/heads/main',
@@ -27,10 +27,10 @@ def main():
     deployment = json.loads((directory / 'deployment.json').read_text())
     attempt = os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT']
     require(re.fullmatch('[0-9]+-[0-9]+', attempt), 'invalid workflow run/attempt')
-    prefix = f'gs://{bucket}/hiro-proxy/{commit}/{attempt}'
+    prefix = f'gs://{bucket}/ada-proxy/{commit}/{attempt}'
     images = {}
     for kind, archive in [('boot', 'deployment-gcp.tar.gz'), ('workload', 'workload-disk.tar.gz')]:
-        name = f'hiro-proxy-{kind}-{commit[:12]}-{attempt}'
+        name = f'ada-proxy-{kind}-{commit[:12]}-{attempt}'
         require(len(name) <= 63, 'GCP image name too long')
         uri = prefix + '/' + archive
         run('gcloud', 'storage', 'cp', '--if-generation-match=0', directory / archive, uri)
@@ -40,8 +40,8 @@ def main():
                      '--licenses=' + ','.join(deployment['licenses'])]
         run('gcloud', 'compute', 'images', 'create', name, '--project=' + project,
             '--source-uri=' + uri, '--architecture=X86_64', '--storage-location=us', *flags,
-            '--description=Hiro proxy ' + entry['release_tag'] + ' ' + kind,
-            '--labels=application=hiro-proxy,source-commit=' + commit, '--quiet')
+            '--description=Ada proxy ' + entry['release_tag'] + ' ' + kind,
+            '--labels=application=ada-proxy,source-commit=' + commit, '--quiet')
         result = json.loads(subprocess.check_output([
             'gcloud', 'compute', 'images', 'describe', name, '--project=' + project, '--format=json']))
         require(result['status'] == 'READY', kind + ' image is not READY')

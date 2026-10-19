@@ -1,11 +1,11 @@
 [package]
-name = "hiro-proxy"
-version = "0.1.4"
+name = "ada-proxy"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.94.1"
-description = "Attested confidential gateway for Hiro"
+description = "Attested confidential gateway for Ada"
 license = "AGPL-3.0-only"
-repository = "https://github.com/cypherpunklabs-ai/hiro-proxy"
+repository = "https://github.com/CypherpunkLabs-AI/Ada"
 
 [dependencies]
 aws-sdk-s3 = { version = "1.145.0", default-features = false, features = ["default-https-client", "http-1x", "rt-tokio"] }

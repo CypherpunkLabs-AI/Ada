@@ -102,14 +102,14 @@ def verify_assets(directory, repository, tag, commit):
         require((directory / name).is_file() and not (directory / name).is_symlink(),
                 f"Missing release asset: {name}")
     document = json.loads((directory / "images.lock.json").read_text())
-    require(document.get("schema") == 1 and set(document["services"]) == {"hiro-proxy"},
+    require(document.get("schema") == 1 and set(document["services"]) == {"ada-proxy"},
             "Unexpected image metadata")
-    entry = document["services"]["hiro-proxy"]
+    entry = document["services"]["ada-proxy"]
     require(entry["release_tag"] == tag and entry["source_commit"] == commit
             and entry["workflow_commit"] == commit and entry["source_repository"] == repository
             and entry["source_ref"] == "refs/heads/main"
             and entry["build_workflow"] == ".github/workflows/ci.yml"
-            and entry["runtime_profile"] == "hiro.gcp-tdx.v1", "Release/build identity mismatch")
+            and entry["runtime_profile"] == "ada.gcp-tdx.v1", "Release/build identity mismatch")
     require(entry["image"] == "ghcr.io/" + repository.lower()
             and re.fullmatch(r"sha256:[0-9a-f]{64}", entry["digest"]), "Invalid image identity")
     reference = entry["image"] + "@" + entry["digest"]

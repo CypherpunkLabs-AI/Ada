@@ -10,8 +10,8 @@ import sys
 from release_proof import stage_release_proof
 
 ROOT = Path(__file__).resolve().parent
-EXTEND = '/usr/lib/h-image/tdx-extend'
-REPORT = Path('/sys/kernel/config/tsm/report/hiro-proxy')
+EXTEND = '/usr/lib/ada-image/tdx-extend'
+REPORT = Path('/sys/kernel/config/tsm/report/ada-proxy')
 
 
 def run(*args, **kw):
@@ -35,7 +35,7 @@ def quote():
 def main():
     run('swapoff', '--all')
     if any(line.strip() for line in Path('/proc/swaps').read_text().splitlines()[1:]):
-        raise ValueError('swap must be disabled before starting Hiro')
+        raise ValueError('swap must be disabled before starting Ada')
     release_bytes = (ROOT / 'release.json').read_bytes()
     release = json.loads(release_bytes)
     for file, key in [('compose.yaml', 'compose_sha256'), ('images.lock.json', 'image_lock_sha256')]:
@@ -55,7 +55,7 @@ def main():
     if not os.path.ismount('/sys/kernel/config'):
         run('mount', '-t', 'configfs', 'configfs', '/sys/kernel/config')
     subprocess.run(['modprobe', 'tdx_guest'], check=False)
-    evidence = Path('/run/hiro/attestation')
+    evidence = Path('/run/ada/attestation')
     evidence.mkdir(parents=True, exist_ok=True, mode=0o755)
     os.chmod(evidence.parent, 0o755)
     os.chmod(evidence, 0o755)
@@ -74,16 +74,16 @@ def main():
     root_parameter = 'roothash=' + image_release['boot']['dm_verity_root_hash']
     if root_parameter not in Path('/proc/cmdline').read_text().split():
         raise ValueError('release proof does not match the booted root filesystem')
-    workload_parameter = 'h-image.workload_sha256=' + image_release['workload_sha256']
+    workload_parameter = 'ada-image.workload_sha256=' + image_release['workload_sha256']
     if (workload_parameter not in Path('/proc/cmdline').read_text().split()
-            or image_release['workload_sha256'] != os.environ['H_IMAGE_WORKLOAD_SHA256']):
+            or image_release['workload_sha256'] != os.environ['ADA_IMAGE_WORKLOAD_SHA256']):
         raise ValueError('release proof does not match the measured workload archive')
     print('Public release proofs matched to measured workload and boot root', flush=True)
     if Path('/sys/firmware/acpi/tables/CCEL').exists():
         REPORT.mkdir(exist_ok=True)
         if (REPORT / 'provider').read_text().strip() != 'tdx_guest':
             raise ValueError('TDX provider unavailable')
-        event = b'hiro.release.v1\0' + release_bytes
+        event = b'ada.release.v1\0' + release_bytes
         expected = hashlib.sha384(bytes(48) + hashlib.sha384(event).digest()).digest()
         current = quote()
         if current == bytes(48):
@@ -108,19 +108,19 @@ def main():
         raise ValueError('loaded container identity mismatch')
     # docker save/load does not preserve registry RepoDigests. Use the exact
     # content-addressed config ID recorded at build time, never a tag or pull.
-    override = {'services': {'hiro-proxy': {'image': image_id, 'pull_policy': 'never'}}}
+    override = {'services': {'ada-proxy': {'image': image_id, 'pull_policy': 'never'}}}
     (evidence.parent / 'container.json').write_text(json.dumps(override))
     # The service env_file reads /mnt/config/secrets.env. Disable automatic
     # .env loading so deployment secrets never participate in YAML interpolation.
-    run('docker', 'compose', '--project-name', 'hiro', '--env-file', '/dev/null',
+    run('docker', 'compose', '--project-name', 'ada', '--env-file', '/dev/null',
         '-f', str(ROOT / 'compose.yaml'), '-f', str(evidence.parent / 'container.json'),
         'up', '-d', '--pull', 'never', '--no-build')
-    print('Hiro proxy release started', flush=True)
+    print('Ada proxy release started', flush=True)
 
 
 if __name__ == '__main__':
     try:
         main()
     except Exception as error:
-        print('Hiro startup failed: ' + str(error), file=sys.stderr)
+        print('Ada startup failed: ' + str(error), file=sys.stderr)
         sys.exit(1)

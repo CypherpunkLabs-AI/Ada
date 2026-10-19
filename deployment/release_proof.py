@@ -41,14 +41,14 @@ def load_release_proof(directory, expected_release=None):
         require(release_bytes == expected_release, 'release proof does not match the embedded workload')
     release = json.loads(release_bytes)
     image = json.loads(files['image-release.json'])
-    require(release['schema'] == 1 and release['profile'] == 'hiro.gcp-tdx.v1', 'unsupported workload proof')
-    require(image['schema'] == 1 and image['profile'] == 'hiro.gcp-tdx.boot.v1', 'unsupported image proof')
+    require(release['schema'] == 1 and release['profile'] == 'ada.gcp-tdx.v1', 'unsupported workload proof')
+    require(image['schema'] == 1 and image['profile'] == 'ada.gcp-tdx.boot.v1', 'unsupported image proof')
     commit = release['source_commit']
     require(isinstance(commit, str) and re.fullmatch('[0-9a-f]{40}', commit)
             and image['source_commit'] == commit, 'release proof source commit mismatch')
     require(image['workload_release_sha256'] == hashlib.sha256(release_bytes).hexdigest(),
             'image proof does not identify the exact workload bytes')
-    event = hashlib.sha384(b'hiro.release.v1\0' + release_bytes).digest()
+    event = hashlib.sha384(b'ada.release.v1\0' + release_bytes).digest()
     require(image['application_rtmr3'] == hashlib.sha384(bytes(48) + event).hexdigest(),
             'image proof application measurement mismatch')
 

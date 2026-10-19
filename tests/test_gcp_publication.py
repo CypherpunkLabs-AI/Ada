@@ -53,8 +53,8 @@ class GcpPublication(unittest.TestCase):
         create = [event for event in events if event[:4] == ('gcloud', 'compute', 'images', 'create')]
         self.assertEqual(len(create), 2)
         self.assertLess(events.index(('verified-deployment',)), events.index(create[0]))
-        self.assertIn('--source-uri=gs://images-test/hiro-proxy/' + COMMIT + '/10-2/deployment-gcp.tar.gz', create[0])
-        self.assertIn('--source-uri=gs://images-test/hiro-proxy/' + COMMIT + '/10-2/workload-disk.tar.gz', create[1])
+        self.assertIn('--source-uri=gs://images-test/ada-proxy/' + COMMIT + '/10-2/deployment-gcp.tar.gz', create[0])
+        self.assertIn('--source-uri=gs://images-test/ada-proxy/' + COMMIT + '/10-2/workload-disk.tar.gz', create[1])
         self.assertTrue(any(arg.startswith('--guest-os-features=') for arg in create[0]))
         self.assertFalse(any(arg.startswith('--guest-os-features=') for arg in create[1]))
         upload = [event for event in events if event[:3] == ('gcloud', 'storage', 'cp')]

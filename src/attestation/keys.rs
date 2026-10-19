@@ -5,8 +5,8 @@ use ed25519_dalek::{Signer, SigningKey};
 use std::sync::Arc;
 use zeroize::Zeroizing;
 
-const RECEIPT_ID: &str = "hiro-ephemeral-receipt-ed25519-v1";
-const BINDING_ID: &str = "hiro-ephemeral-oak-session-v1";
+const RECEIPT_ID: &str = "ada-ephemeral-receipt-ed25519-v1";
+const BINDING_ID: &str = "ada-ephemeral-oak-session-v1";
 
 pub struct OakKeys {
     receipt: SigningKey,

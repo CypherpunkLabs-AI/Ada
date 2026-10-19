@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
 use aci_protocol::types::SourceProvenance;
-use anyhow::Context;
-use axum::{Router, http::StatusCode, routing::get};
-use hiro_proxy::{
+use ada_proxy::{
     attestation::evidence::ServiceConfig,
     attestation::tdx::Attester,
     config::Config,
     inference::upstream::InferenceBackend,
     services::documents::{DocumentGateway, VisionGateway},
 };
+use anyhow::Context;
+use axum::{Router, http::StatusCode, routing::get};
 use secrecy::ExposeSecret;
 use std::{
     os::unix::fs::{FileTypeExt, PermissionsExt},
@@ -33,15 +33,15 @@ async fn main() -> anyhow::Result<()> {
     match arguments.as_slice() {
         [] => {}
         [command] if command == "serve" => {}
-        _ => anyhow::bail!("usage: hiro-proxy [serve]"),
+        _ => anyhow::bail!("usage: ada-proxy [serve]"),
     }
     let config = Config::from_env().context("invalid configuration")?;
     // Check RAM storage and disabled swap before generating any service keys.
-    let tls = hiro_proxy::tls::Server::new(config.tls.clone())?;
-    let jwt_verifier = hiro_proxy::auth::JwtVerifier::new(&config.auth)
+    let tls = ada_proxy::tls::Server::new(config.tls.clone())?;
+    let jwt_verifier = ada_proxy::auth::JwtVerifier::new(&config.auth)
         .context("invalid authentication configuration")?;
 
-    let oak_keys = Arc::new(hiro_proxy::attestation::keys::OakKeys::new()?);
+    let oak_keys = Arc::new(ada_proxy::attestation::keys::OakKeys::new()?);
     let attester = Attester::new(
         config.tdx_report_dir.clone(),
         config.attestation_dir.clone(),
@@ -56,7 +56,7 @@ async fn main() -> anyhow::Result<()> {
         .context("failed to construct NEAR inference backend")?,
     );
 
-    let service = hiro_proxy::services::inference::Service::new(
+    let service = ada_proxy::services::inference::Service::new(
         oak_keys.clone(),
         attester,
         upstream.clone(),
@@ -72,32 +72,32 @@ async fn main() -> anyhow::Result<()> {
             receipt_ttl_seconds: config.receipt_ttl.as_secs(),
         },
     )
-    .context("failed to seal Hiro ACI service identity")?;
+    .context("failed to seal Ada ACI service identity")?;
     let service = Arc::new(service);
-    let db = hiro_proxy::storage::database::pool(
+    let db = ada_proxy::storage::database::pool(
         &config.inference.database_url,
         config.inference.database_max_connections,
     )?;
-    let chat = Arc::new(hiro_proxy::services::chat::ChatService::new(
+    let chat = Arc::new(ada_proxy::services::chat::ChatService::new(
         service.clone(),
         config.inference.clone(),
         db.clone(),
     )?);
-    let stripe = hiro_proxy::services::stripe::StripeClient::new(
+    let stripe = ada_proxy::services::stripe::StripeClient::new(
         db.clone(),
         config.stripe_api_url.clone(),
         config.stripe_secret_key.clone(),
     )?;
-    let mut oak_inner = hiro_proxy::api::inference::router(chat)
-        .merge(hiro_proxy::api::web::router())
-        .merge(hiro_proxy::api::chats::router(db.clone()))
-        .merge(hiro_proxy::api::messages::router(db.clone()))
-        .merge(hiro_proxy::api::preferences::router(db.clone()))
-        .merge(hiro_proxy::api::attachments::router(
+    let mut oak_inner = ada_proxy::api::inference::router(chat)
+        .merge(ada_proxy::api::web::router())
+        .merge(ada_proxy::api::chats::router(db.clone()))
+        .merge(ada_proxy::api::messages::router(db.clone()))
+        .merge(ada_proxy::api::preferences::router(db.clone()))
+        .merge(ada_proxy::api::attachments::router(
             db.clone(),
             config.r2.clone(),
         ))
-        .merge(hiro_proxy::api::credentials::router(db, stripe));
+        .merge(ada_proxy::api::credentials::router(db, stripe));
     let mut broker_task = None;
     if let Ok(document_socket) = std::env::var("DOCUMENT_ROUTER_SOCKET") {
         let token = std::env::var("DOCUMENT_VISION_BROKER_TOKEN")
@@ -139,23 +139,23 @@ async fn main() -> anyhow::Result<()> {
         broker_task = Some(tokio::spawn(async move {
             axum::serve(
                 broker_listener,
-                hiro_proxy::api::documents::vision_router(broker),
+                ada_proxy::api::documents::vision_router(broker),
             )
             .await
         }));
         let documents = DocumentGateway::new(document_socket.into())?;
-        oak_inner = oak_inner.merge(hiro_proxy::api::documents::document_router(documents));
+        oak_inner = oak_inner.merge(ada_proxy::api::documents::document_router(documents));
     }
-    let oak = hiro_proxy::transport::oak::Gateway::new(
+    let oak = ada_proxy::transport::oak::Gateway::new(
         service.clone(),
         oak_keys.binding.clone(),
-        hiro_proxy::auth::protect(oak_inner, jwt_verifier),
+        ada_proxy::auth::protect(oak_inner, jwt_verifier),
     );
     let app = Router::new()
         .route("/health", get(|| async { StatusCode::OK }))
         .route(
             "/v1/verification-policy",
-            get(hiro_proxy::attestation::policy::get),
+            get(ada_proxy::attestation::policy::get),
         )
         .merge(oak.router());
     let listener = TcpListener::bind(config.bind_address)
@@ -164,7 +164,7 @@ async fn main() -> anyhow::Result<()> {
     info!(
         address = %config.bind_address,
         upstream = %config.nearai_base_url,
-        "Hiro HTTPS/WSS gateway listening"
+        "Ada HTTPS/WSS gateway listening"
     );
     tokio::select! {
         result = tls.serve(listener, app, service) => {
@@ -210,7 +210,7 @@ async fn shutdown_signal() {
 
 fn init_tracing() {
     let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("hiro_proxy=info"))
+        .unwrap_or_else(|_| EnvFilter::new("ada_proxy=info"))
         // ACME dependency debug/error messages can contain complete HTTP bodies.
         // Emit only the redacted lifecycle messages in tls::Server instead.
         .add_directive("rustls_acme=off".parse().expect("static log filter"))

@@ -1,4 +1,4 @@
-//! Serialize SDK-verified facts for Hiro's signed completion envelope.
+//! Serialize SDK-verified facts for Ada's signed completion envelope.
 use nearai_inference_sdk::{
     AttestationVerificationResult, DeploymentProvenanceStatus, GatewayTlsBinding,
     GpuEvidenceStatus, TcbStatus, VerifiedAttestationEvidence, VerifiedCompletionResult,
@@ -36,7 +36,7 @@ impl VerifiedInference {
                 .chain(preflight.models.iter().map(|model| &model.evidence))
                 .all(|evidence| evidence.tcb_status == TcbStatus::UpToDate),
             evidence: json!({
-                "schema":"hiro.nearai-inference.v1",
+                "schema":"ada.nearai-inference.v1",
                 "basis":"sdk_verified_claims",
                 "sdk_revision":"14b29f67b63b97bf63678296e095ddfcc8f5ba74",
                 "image_provenance_policy": {

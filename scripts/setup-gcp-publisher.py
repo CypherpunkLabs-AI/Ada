@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Authorize this proxy repository to use the existing Hiro image publisher in Cloud Shell."""
+"""Authorize this proxy repository to use the existing Ada image publisher in Cloud Shell."""
 import argparse
 import json
 import re
@@ -17,7 +17,7 @@ def data(*args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--repository', default='CypherpunkLabs-AI/hiro')
+    parser.add_argument('--repository', default='CypherpunkLabs-AI/Ada')
     parser.add_argument('--project', default='cypherpunklabs')
     args = parser.parse_args()
     if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', args.repository):
@@ -25,8 +25,8 @@ def main():
     with urlopen('https://api.github.com/repos/' + args.repository, timeout=30) as response:
         repo = json.load(response)
     project = data('gcloud', 'projects', 'describe', args.project, '--format=json')
-    account = 'hiro-image-publisher@' + args.project + '.iam.gserviceaccount.com'
-    pool, provider = 'hiro-image-publisher', 'hiro'
+    account = 'ada-image-publisher@' + args.project + '.iam.gserviceaccount.com'
+    pool, provider = 'ada-image-publisher', 'ada-proxy'
     # Reuse the existing bucket, publisher role and service account. Do not create
     # broad IAM grants or modify the OS repository's federation provider.
     providers = data('gcloud', 'iam', 'workload-identity-pools', 'providers', 'list',

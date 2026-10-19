@@ -14,7 +14,7 @@ import sys
 import tarfile
 
 ROOT = Path(__file__).resolve().parents[1]
-OS_REPOSITORY = 'CypherpunkLabs-AI/hiro-image'
+OS_REPOSITORY = 'CypherpunkLabs-AI/Ada-image'
 PROFILE = 'gcp-tdx-platform-profile.json'
 PROOFS = ('release.json', 'image-release.json', 'release.sigstore.json')
 DEPLOYMENT_FILES = ('deployment-gcp.tar.gz', 'deployment.efi', 'cmdline', 'workload.tar',
@@ -50,7 +50,7 @@ def selected_version(root=ROOT):
 
 def verify_os(directory, version, check_files=True):
     manifest = json.loads((directory / 'os-release.json').read_text())
-    require(manifest.get('kind') == 'h-image.os-release.v1' and manifest['tag'] == version
+    require(manifest.get('kind') == 'ada-image.os-release.v1' and manifest['tag'] == version
             and manifest['source_repository'] == OS_REPOSITORY
             and manifest['source_ref'] == 'refs/tags/' + version
             and manifest['build_workflow'] == '.github/workflows/image.yml', 'OS release identity mismatch')
@@ -64,7 +64,7 @@ def verify_os(directory, version, check_files=True):
         '--signer-digest', commit, '--source-digest', commit, '--source-ref', 'refs/tags/' + version,
         '--predicate-type', 'https://slsa.dev/provenance/v1', '--deny-self-hosted-runners')
     if check_files:
-        require({'image-tools.tar.gz', 'h-image-gcp.tar.gz', PROFILE} <= set(manifest['files']),
+        require({'image-tools.tar.gz', 'ada-image-gcp.tar.gz', PROFILE} <= set(manifest['files']),
                 'OS release lacks assembly tools, disk or qualified platform profile')
         for name, entry in manifest['files'].items():
             require(Path(name).name == name and name not in ('.', '..'), 'unsafe OS artifact name')
@@ -98,8 +98,8 @@ def select_os(base, tools, root=ROOT):
 
 def build_workload(directory, staging, root=ROOT):
     lock = json.loads((directory / 'images.lock.json').read_text())
-    require(lock['schema'] == 1 and set(lock['services']) == {'hiro-proxy'}, 'only the proxy may be packaged')
-    proxy = lock['services']['hiro-proxy']
+    require(lock['schema'] == 1 and set(lock['services']) == {'ada-proxy'}, 'only the proxy may be packaged')
+    proxy = lock['services']['ada-proxy']
     reference = proxy['image'] + '@' + proxy['digest']
     require(re.fullmatch(r'ghcr\.io/[a-z0-9_.-]+/[a-z0-9_.-]+@sha256:[0-9a-f]{64}', reference),
             'proxy must be selected by OCI digest')
@@ -113,21 +113,21 @@ def build_workload(directory, staging, root=ROOT):
     run('docker', 'save', '--output', staging / 'proxy.tar', config['Id'])
     (staging / 'proxy-image-id').write_text(config['Id'] + '\n')
     compose = json.loads((root / 'deployment/compose.json').read_text())
-    require(set(compose['services']) == {'hiro-proxy'}, 'deployment must contain only the proxy')
-    service = compose['services']['hiro-proxy']
+    require(set(compose['services']) == {'ada-proxy'}, 'deployment must contain only the proxy')
+    service = compose['services']['ada-proxy']
     service['image'] = reference
     service['pull_policy'] = 'never'
-    service['environment'].update(HIRO_SOURCE_REPOSITORY='https://github.com/' + proxy['source_repository'],
-                                  HIRO_SOURCE_COMMIT=proxy['source_commit'], HIRO_IMAGE_DIGEST=proxy['digest'])
+    service['environment'].update(ADA_SOURCE_REPOSITORY='https://github.com/' + proxy['source_repository'],
+                                  ADA_SOURCE_COMMIT=proxy['source_commit'], ADA_IMAGE_DIGEST=proxy['digest'])
     # JSON is a YAML subset accepted by Compose; exact serialized bytes are measured.
     write_json(staging / 'compose.yaml', compose)
     shutil.copyfile(directory / 'images.lock.json', staging / 'images.lock.json')
     for name in ('start', 'launch.py', 'release_proof.py'):
         shutil.copyfile(root / 'deployment' / name, staging / name)
-    release = {'schema': 1, 'profile': 'hiro.gcp-tdx.v1', 'tag': proxy['release_tag'],
+    release = {'schema': 1, 'profile': 'ada.gcp-tdx.v1', 'tag': proxy['release_tag'],
                'source_commit': proxy['source_commit'], 'os_repository': OS_REPOSITORY,
                'os_version': selected_version(root), 'compose_sha256': digest(staging / 'compose.yaml'),
-               'image_lock_sha256': digest(staging / 'images.lock.json'), 'containers': {'hiro-proxy': reference}}
+               'image_lock_sha256': digest(staging / 'images.lock.json'), 'containers': {'ada-proxy': reference}}
     write_json(staging / 'release.json', release)
     write_json(staging / 'assets.json', {p.name: digest(p) for p in sorted(staging.iterdir())})
     # Explicit staging allowlist above: never archive the checkout, .env or config disk.
@@ -148,12 +148,12 @@ def finalize(directory, version):
     release_bytes = (directory / 'release.json').read_bytes()
     release = json.loads(release_bytes)
     require(deployment['os']['tag'] == version and release['os_version'] == version, 'selected OS changed')
-    event = hashlib.sha384(b'hiro.release.v1\0' + release_bytes).digest()
+    event = hashlib.sha384(b'ada.release.v1\0' + release_bytes).digest()
     rtmr3 = hashlib.sha384(bytes(48) + event).hexdigest()
     appraisal = deployment['platform_appraisal']
     require(appraisal['status'] == 'included', 'qualified GCP boot measurements required')
     expected = dict(appraisal['expected_boot'], rtmr3=rtmr3)
-    image = {'schema': 1, 'profile': 'hiro.gcp-tdx.boot.v1', 'source_commit': release['source_commit'],
+    image = {'schema': 1, 'profile': 'ada.gcp-tdx.boot.v1', 'source_commit': release['source_commit'],
              'workload_release_sha256': hashlib.sha256(release_bytes).hexdigest(),
              'workload_sha256': deployment['workload_sha256'], 'application_rtmr3': rtmr3,
              'boot': deployment['boot'], 'expected_measurements': expected,
@@ -162,13 +162,13 @@ def finalize(directory, version):
              'os_release_manifest': (directory / 'os-release.json').read_text(),
              'os_release_sigstore_bundle': (directory / 'os-release.sigstore.json').read_text(),
              'embedded_application_credentials': False,
-             'runtime_configuration': {'filesystem_label': 'hiro-config', 'env_file': '/mnt/config/secrets.env',
+             'runtime_configuration': {'filesystem_label': 'ada-config', 'env_file': '/mnt/config/secrets.env',
                                        'release_proof_directory': '/mnt/config/release-proof'}}
     write_json(directory / 'image-release.json', image)
     with (directory / 'release-notes.md').open('a') as output:
         output.write(f'\nOS: `{OS_REPOSITORY}@{version}`. Workload SHA-256: `{deployment["workload_sha256"]}`.\n\n'
-                     'Deploy the boot image and the separate `hiro-workload` disk from this release together. '
-                     'Attach a private `hiro-config` disk containing `secrets.env` and the `release-proof/` '
+                     'Deploy the boot image and the separate `ada-workload` disk from this release together. '
+                     'Attach a private `ada-config` disk containing `secrets.env` and the `release-proof/` '
                      'directory from `release-proof.tar.gz`. TLS terminates in the proxy on VM port 443.\n\n'
                      'Required GCP machine and firmware configuration: `deployment.json` → '
                      '`platform_appraisal.launch`. Live TDX boot verification is separate from image assembly.\n')
@@ -266,10 +266,10 @@ def verify_deployment(directory, entry):
     image = json.loads(proofs['image-release.json'])
     deployment = json.loads((directory / 'deployment.json').read_text())
     require(release['source_commit'] == entry['source_commit'] and release['tag'] == entry['release_tag']
-            and release['containers'] == {'hiro-proxy': entry['image'] + '@' + entry['digest']}, 'workload identity mismatch')
+            and release['containers'] == {'ada-proxy': entry['image'] + '@' + entry['digest']}, 'workload identity mismatch')
     require(release['compose_sha256'] == digest(directory / 'compose.yaml')
             and release['image_lock_sha256'] == digest(directory / 'images.lock.json'), 'workload metadata mismatch')
-    require(deployment['kind'] == 'h-image.deployment.v1' and image['deployment'] == deployment
+    require(deployment['kind'] == 'ada-image.deployment.v1' and image['deployment'] == deployment
             and set(deployment['files']) == set(DEPLOYMENT_FILES), 'deployment manifest mismatch')
     for name, expected in deployment['files'].items():
         require(digest(directory / name) == expected, 'deployment artifact mismatch: ' + name)
@@ -283,7 +283,7 @@ def verify_deployment(directory, entry):
                     and archive.extractfile(members[0]).read() == (directory / name).read_bytes(),
                     'measured workload differs from published metadata: ' + name)
     require(image['boot'] == deployment['boot'] and
-            ('h-image.workload_sha256=' + image['workload_sha256']) in image['boot']['kernel_command_line'].split(),
+            ('ada-image.workload_sha256=' + image['workload_sha256']) in image['boot']['kernel_command_line'].split(),
             'boot command line does not bind this workload')
     require(image['os_release_manifest'] == (directory / 'os-release.json').read_text()
             and image['os_release_sigstore_bundle'] == (directory / 'os-release.sigstore.json').read_text(),

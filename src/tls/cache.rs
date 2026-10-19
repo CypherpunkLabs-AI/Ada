@@ -9,7 +9,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub(super) const CACHE_DIR: &str = "/run/hiro/tls";
+pub(super) const CACHE_DIR: &str = "/run/ada/tls";
 const MAX_ENTRY: u64 = 128 * 1024;
 
 pub(super) struct RamCache;

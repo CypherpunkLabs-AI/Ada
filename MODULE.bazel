@@ -1,4 +1,4 @@
-module(name = "hiro_proxy")
+module(name = "ada_proxy")
 
 bazel_dep(name = "rules_rust", version = "0.70.0")
 bazel_dep(name = "oak")
@@ -27,7 +27,7 @@ crate.from_cargo(
     supported_platform_triples = ["x86_64-unknown-linux-gnu"],
 )
 
-# Oak protobuf messages and Hiro's Message calls must share one trait identity.
+# Oak protobuf messages and Ada's Message calls must share one trait identity.
 crate.annotation(
     crate = "prost",
     repositories = ["proxy_crates"],

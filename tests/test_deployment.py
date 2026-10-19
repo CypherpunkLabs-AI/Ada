@@ -118,10 +118,10 @@ class Deployment(unittest.TestCase):
             self.assertEqual(set(archive.getnames()), {'proxy.tar', 'proxy-image-id', 'compose.yaml',
                              'images.lock.json', 'release.json', 'assets.json', 'start', 'launch.py', 'release_proof.py'})
             compose = json.load(archive.extractfile('compose.yaml'))
-            self.assertEqual(set(compose['services']), {'hiro-proxy'})
-            service = compose['services']['hiro-proxy']
+            self.assertEqual(set(compose['services']), {'ada-proxy'})
+            service = compose['services']['ada-proxy']
             self.assertEqual(service['ports'], ['443:8443'])
-            self.assertEqual(service['environment']['HIRO_SOURCE_COMMIT'], self.entry['source_commit'])
+            self.assertEqual(service['environment']['ADA_SOURCE_COMMIT'], self.entry['source_commit'])
             self.assertEqual(service['env_file'][0]['path'], '/mnt/config/secrets.env')
             self.assertEqual(service['image'], reference)
             self.assertIsNone(service['environment']['DOCUMENT_ROUTER_SOCKET'])
