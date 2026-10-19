@@ -1,5 +1,16 @@
 {
-  "approved_releases": [],
+  "approved_releases": [
+    {
+      "allow_cached_keys": false,
+      "allow_dynamic_platform": true,
+      "allow_smt": true,
+      "image_release_sha256": "bf93c49c5ff53ab2dd982ad90dce4c00d43d9e1a587efa5a6916a67b56918120",
+      "release_sha256": "e6721881b4e328e4cc460580edd22d60b99c9fe0a12da0155bc915206466ee86",
+      "sequence": 6,
+      "source_commit": "e1bccc0d007dd5e31665a9c7ca952a46b6e15f32",
+      "tag": "v0.2.0"
+    }
+  ],
   "endpoint": "wss://api.cypherpunklabs.io/v1/session",
   "gcp_instance": {
     "instance_id": "6981755009540883484",
